@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Idempotently adds opencode-agent-rules instruction URLs to ~/.config/opencode/opencode.json[c]
+# Cowardly: if every target URL is already present, no-op unless --force.
+set -euo pipefail
+
+FORCE=0
+for arg in "$@"; do
+  case "$arg" in
+    --force|-f) FORCE=1 ;;
+    -h|--help)
+      echo "usage: $0 [--force|-f]"; exit 0 ;;
+    *) echo "unknown arg: $arg (usage: $0 [--force|-f])" >&2; exit 2 ;;
+  esac
+done
+
+GH_USER="squoyster"
+REPO="opencode-agent-rules"
+BRANCH="main"
+# ponytail: AGENTS_TEMPLATE maps to templates/AGENTS.md; the rest are rules/<name>.md
+CANDIDATES=(base git verification aws java-spring node-react postgres security AGENTS_TEMPLATE)
+
+CONFIG_DIR="${HOME}/.config/opencode"
+CONFIG=""
+
+for f in opencode.jsonc opencode.json; do
+  p="${CONFIG_DIR}/${f}"
+  if [[ -s "$p" ]]; then
+    CONFIG="$p"
+    break
+  fi
+done
+
+if [[ -z "$CONFIG" ]]; then
+  mkdir -p "$CONFIG_DIR"
+  CONFIG="${CONFIG_DIR}/opencode.json"
+  printf '{}\n' > "$CONFIG"
+fi
+
+command -v jq >/dev/null 2>&1 || { echo "error: jq is required" >&2; exit 1; }
+command -v curl >/dev/null 2>&1 || { echo "error: curl is required" >&2; exit 1; }
+
+URLS=()
+for r in "${CANDIDATES[@]}"; do
+  if [[ "$r" == "AGENTS_TEMPLATE" ]]; then
+    url="https://raw.githubusercontent.com/${GH_USER}/${REPO}/${BRANCH}/templates/AGENTS.md"
+  else
+    url="https://raw.githubusercontent.com/${GH_USER}/${REPO}/${BRANCH}/rules/${r}.md"
+  fi
+  body=$(curl -fsSL "$url" 2>/dev/null || true)
+  [[ -n "$body" ]] && URLS+=("$url")
+done
+
+if [[ ${#URLS[@]} -eq 0 ]]; then
+  echo "No rule files with content found on ${BRANCH}; nothing to do." >&2
+  exit 0
+fi
+
+existing=$(jq -r '.instructions // [] | .[]' "$CONFIG" 2>/dev/null || true)
+present=0
+for u in "${URLS[@]}"; do
+  if grep -Fxq "$u" <<<"$existing"; then present=$((present+1)); fi
+done
+
+if [[ "$FORCE" -eq 0 ]] && [[ "$present" -eq "${#URLS[@]}" ]]; then
+  echo "All ${#URLS[@]} instruction URLs already present in ${CONFIG}; nothing to do (use --force to re-install)."
+  exit 0
+fi
+
+urls_json=$(printf '%s\n' "${URLS[@]}" | jq -R . | jq -s .)
+
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+jq --argjson urls "$urls_json" \
+  '.instructions = (((.instructions // []) + $urls) | unique)' \
+  "$CONFIG" > "$tmp"
+mv "$tmp" "$CONFIG"
+
+echo "Updated ${CONFIG} (${present} already present, added $(( ${#URLS[@]} - present )) new)."
