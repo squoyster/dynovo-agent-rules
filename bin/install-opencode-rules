@@ -14,10 +14,10 @@ for arg in "$@"; do
 done
 
 GH_USER="squoyster"
-REPO="opencode-agent-rules"
+REPO="dynovo-agent-rules"
 BRANCH="main"
-# ponytail: AGENTS_TEMPLATE maps to templates/AGENTS.md; the rest are rules/<name>.md
-CANDIDATES=(base git verification aws java-spring node-react postgres security AGENTS_TEMPLATE)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RULES_DIR="${SCRIPT_DIR}/../rules"
 
 CONFIG_DIR="${HOME}/.config/opencode"
 CONFIG=""
@@ -37,18 +37,14 @@ if [[ -z "$CONFIG" ]]; then
 fi
 
 command -v jq >/dev/null 2>&1 || { echo "error: jq is required" >&2; exit 1; }
-command -v curl >/dev/null 2>&1 || { echo "error: curl is required" >&2; exit 1; }
 
 URLS=()
-for r in "${CANDIDATES[@]}"; do
-  if [[ "$r" == "AGENTS_TEMPLATE" ]]; then
-    url="https://raw.githubusercontent.com/${GH_USER}/${REPO}/${BRANCH}/templates/AGENTS.md"
-  else
-    url="https://raw.githubusercontent.com/${GH_USER}/${REPO}/${BRANCH}/rules/${r}.md"
-  fi
-  body=$(curl -fsSL "$url" 2>/dev/null || true)
-  [[ -n "$body" ]] && URLS+=("$url")
+shopt -s nullglob
+for f in "$RULES_DIR"/*.md; do
+  [[ -s "$f" ]] || continue
+  URLS+=("https://raw.githubusercontent.com/${GH_USER}/${REPO}/${BRANCH}/rules/$(basename "$f")")
 done
+shopt -u nullglob
 
 if [[ ${#URLS[@]} -eq 0 ]]; then
   echo "No rule files with content found on ${BRANCH}; nothing to do." >&2
