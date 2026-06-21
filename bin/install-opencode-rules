@@ -51,10 +51,10 @@ if [[ ${#URLS[@]} -eq 0 ]]; then
   exit 0
 fi
 
-existing=$(jq -r '.instructions // [] | .[]' "$CONFIG" 2>/dev/null || true)
+# ponytail: grep-based idempotency works on JSONC; jq round-trip would strip comments.
 present=0
 for u in "${URLS[@]}"; do
-  if grep -Fxq "$u" <<<"$existing"; then present=$((present+1)); fi
+  if grep -Fq -- "$u" "$CONFIG"; then present=$((present+1)); fi
 done
 
 if [[ "$FORCE" -eq 0 ]] && [[ "$present" -eq "${#URLS[@]}" ]]; then
@@ -62,13 +62,28 @@ if [[ "$FORCE" -eq 0 ]] && [[ "$present" -eq "${#URLS[@]}" ]]; then
   exit 0
 fi
 
-urls_json=$(printf '%s\n' "${URLS[@]}" | jq -R . | jq -s .)
+# ponytail: if "instructions" key already exists, defer to manual merge rather
+# than risk a duplicate key or a comment-stripping jq round-trip.
+if grep -Eq '^[[:space:]]*"instructions"[[:space:]]*:' "$CONFIG"; then
+  echo "Config ${CONFIG} already has an \"instructions\" key; merge these URLs manually:" >&2
+  for u in "${URLS[@]}"; do printf '  "%s",\n' "$u" >&2; done
+  exit 1
+fi
+
+urls_json=$(printf '%s\n' "${URLS[@]}" | jq -R . | jq -s . | jq -c .)
+key_line="  \"instructions\": ${urls_json},"
 
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
-jq --argjson urls "$urls_json" \
-  '.instructions = (((.instructions // []) + $urls) | unique)' \
-  "$CONFIG" > "$tmp"
-mv "$tmp" "$CONFIG"
+# Insert the key before the final top-level closing brace; preserves comments.
+awk -v line="$key_line" '
+  { lines[NR]=$0; if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) last=NR }
+  END {
+    for (i=1; i<=NR; i++) {
+      if (i == last) print line
+      print lines[i]
+    }
+  }
+' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
 
 echo "Updated ${CONFIG} (${present} already present, added $(( ${#URLS[@]} - present )) new)."
