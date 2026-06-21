@@ -76,11 +76,24 @@ key_line="  \"instructions\": ${urls_json},"
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
 # Insert the key before the final top-level closing brace; preserves comments.
+# ponytail: also ensure the previous real line ends with a comma (the bug this
+# guards against: inserting after `}` with no comma produces invalid JSONC).
 awk -v line="$key_line" '
   { lines[NR]=$0; if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) last=NR }
   END {
+    prev=0
+    for (i=last-1; i>=1; i--) {
+      s=lines[i]; sub(/^[[:space:]]+/, "", s)
+      if (s == "" || s ~ /^\/\//) continue
+      prev=i; break
+    }
     for (i=1; i<=NR; i++) {
       if (i == last) print line
+      if (i == prev) {
+        t=lines[i]; sub(/[[:space:]]+$/, "", t)
+        if (t ~ /[}\]"0-9A-Za-z]$/ && t !~ /,$/) t=t ","
+        print t; continue
+      }
       print lines[i]
     }
   }
