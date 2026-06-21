@@ -1,0 +1,28 @@
+# local config / secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# logs / local runtime
+*.log
+logs/
+tmp/
+.cache/
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Go
+/headroom-dashboard
+*.test
+*.out
+*.prof
+coverage.*
