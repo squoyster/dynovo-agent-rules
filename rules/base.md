@@ -33,6 +33,10 @@ R001 global | new_agent_directive(x) -> M encode_as(Dir) ∧ Pref(dox_notation,p
 R002 global | acting_on_directive(x) -> M parse(x) ∧ classify(x,{invariant,precondition,postcondition,permission,prohibition,preference,exception}) ∧ encode(x,dox).
 R003 global | report(T) -> S include(assumptions ∧ selected_rules ∧ actions_taken ∧ verification_results ∧ unresolved_conflicts?).
 R004 global | reasoning_trace -> F expose_long_chain_of_thought ∧ Pref(compact_rule_trace,deliberation_prose).
+R005 global | re_deliberated(D, ¬new_info, n≥2) -> M commit(first_compliant(D)) ∧ F re_deliberate(D).
+  first_compliant(D) := first option in D passing all rules.
+  tiebreak := action≻inaction, concrete≻abstract, system_suggested≻self_generated.
+  axiom: cost(indecision) > cost(suboptimal_compliant_choice).
 ```
 
 ## DOX Adoption
