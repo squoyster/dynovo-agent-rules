@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Idempotently adds opencode-agent-rules instruction URLs to ~/.config/opencode/opencode.json[c]
-# Cowardly: if every target URL is already present, no-op unless --force.
+# Idempotently adds the root AGENTS.md instruction URL to ~/.config/opencode/opencode.json[c].
+# If the target URL is already present, no-op unless --force.
 set -euo pipefail
 
 FORCE=0
@@ -17,7 +17,7 @@ GH_USER="squoyster"
 REPO="dynovo-agent-rules"
 BRANCH="main"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RULES_DIR="${SCRIPT_DIR}/../rules"
+ANCHOR="${SCRIPT_DIR}/../AGENTS.md"
 
 CONFIG_DIR="${HOME}/.config/opencode"
 CONFIG=""
@@ -33,23 +33,17 @@ done
 if [[ -z "$CONFIG" ]]; then
   mkdir -p "$CONFIG_DIR"
   CONFIG="${CONFIG_DIR}/opencode.json"
-  printf '{}\n' > "$CONFIG"
+  printf '{\n}\n' > "$CONFIG"
 fi
 
 command -v jq >/dev/null 2>&1 || { echo "error: jq is required" >&2; exit 1; }
 
-URLS=()
-shopt -s nullglob
-for f in "$RULES_DIR"/*.md; do
-  [[ -s "$f" ]] || continue
-  URLS+=("https://raw.githubusercontent.com/${GH_USER}/${REPO}/${BRANCH}/rules/$(basename "$f")")
-done
-shopt -u nullglob
-
-if [[ ${#URLS[@]} -eq 0 ]]; then
-  echo "No rule files with content found on ${BRANCH}; nothing to do." >&2
+if [[ ! -s "$ANCHOR" ]]; then
+  echo "Missing or empty anchor: ${ANCHOR}" >&2
   exit 0
 fi
+
+URLS=("https://raw.githubusercontent.com/${GH_USER}/${REPO}/${BRANCH}/AGENTS.md")
 
 # ponytail: grep-based idempotency works on JSONC; jq round-trip would strip comments.
 present=0
@@ -71,7 +65,7 @@ if grep -Eq '^[[:space:]]*"instructions"[[:space:]]*:' "$CONFIG"; then
 fi
 
 urls_json=$(printf '%s\n' "${URLS[@]}" | jq -R . | jq -s . | jq -c .)
-key_line="  \"instructions\": ${urls_json},"
+key_line="  \"instructions\": ${urls_json}"
 
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
