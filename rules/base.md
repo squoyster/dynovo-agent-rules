@@ -34,6 +34,7 @@ R012: navigate(repo) -> M compute(ReadSet(T)) ∧ F read(unbounded_repo).
 R013: routine_read -> M prefer(indexes ∪ changed_files ∪ directly_referenced_sources ∪ directly_referenced_tests ∪ relevant_docs).
 R014: repeated_content(x) -> M replace_with(ref(x)).
 R015: large(file) -> S summarize(file) ∧ pin(contracts ∧ symbols ∧ decisions ∧ risks).
+R015a: summarize(source) ∨ humanize(source_summary) -> M read(../skills/axl-humanize/SKILL.md) ∧ apply(fact_kernel_workflow) ≺ rewrite.
 R016: after_step(Step) -> M update(PinSet) ∧ drop(nonessential_context).
 R017: edit(p) -> F rely_on(stale_memory_for_rules) ∧ M reread(governing_rules(p),current_session).
 ```
@@ -41,7 +42,7 @@ R017: edit(p) -> F rely_on(stale_memory_for_rules) ∧ M reread(governing_rules(
 ## Human-readable translation
 
 ```axl
-R018: request(human_readable(x)) -> M translate_AXL_to_prose(x) [preserve: id,norm,scope,trigger,verify,except,effect].
+R018: request(human_readable(x)) -> M read(../skills/axl-humanize/SKILL.md) ∧ translate_AXL_to_prose(x) [preserve: id,norm,scope,trigger,verify,except,effect].
 R019: translate_AXL_to_prose(x) -> F change_semantics(x).
 R019a: malformed_AXL(x) -> M report(parse_error) ∧ F guess_silently.
 ```
@@ -65,7 +66,7 @@ R027: ctx | update(x) -> F mutate(x) ∧ M append(x') ∧ x'.supersedes=x.
 R028: ctx | retrieve(q) -> M use(longest_matching_prefix(q)).
 R029: ctx | context_pressure -> M load(pins ∧ latest_state ∧ summaries) ≺ raw_history.
 R029a: ctx | seq_count(prefix)>N -> M emit(window_summary(prefix,range)).
-R029b: summary(s) -> M preserve(decisions ∧ invariants ∧ risks ∧ AC ∧ Δ ∧ gates ∧ next).
+R029b: summary(s) -> M preserve(decisions ∧ invariants ∧ risks ∧ AC ∧ Δ ∧ gates ∧ next ∧ pinned_facts?).
 R029c: after(phase) -> M emit(state/current#seq).
 R029d: resume(run) -> M load(latest_state ∧ unresolved ∧ pins).
 R029e: stale(summary) -> M refresh_before_reliance.

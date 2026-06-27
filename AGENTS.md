@@ -11,6 +11,7 @@ Provide compact, machine-readable agent rules that maximize utility per token an
 ## Canonical files
 
 - `rules/base.md` — default operational rules; read for any non-trivial task.
+- `skills/axl-humanize/SKILL.md` — on-demand workflow for faithful AXL expansion, source-summary humanization, and transformation-fidelity assessment.
 - `axl_agentic_coding_dsl_complete.md` — canonical full AXL reference and design spec, including humanization and PSTL context-ledger extensions; read only when extending syntax, resolving ambiguity in rule semantics, evolving the framework, or designing resumability/compression behavior.
 - `rules/*.md` — domain overlays; read only when the task materially touches that domain.
 
@@ -19,7 +20,8 @@ Provide compact, machine-readable agent rules that maximize utility per token an
 1. `AGENTS.md`
 2. `rules/base.md`
 3. relevant `rules/<domain>.md` only if applicable
-4. `axl_agentic_coding_dsl_complete.md` only if base rules are insufficient for the task or the task is about DSL semantics, humanization, or context-ledger design
+4. `skills/axl-humanize/SKILL.md` only for translation, humanization, or fidelity assessment
+5. `axl_agentic_coding_dsl_complete.md` only if base rules are insufficient for the task or the task is about DSL semantics or context-ledger design
 
 ## Load only if
 
@@ -30,6 +32,7 @@ Provide compact, machine-readable agent rules that maximize utility per token an
 - `rules/node-react.md` — Node, frontend, React, TypeScript, package scripts
 - `rules/java-spring.md` — Java, Spring, JVM build and test flow
 - `rules/postgres.md` — schema, queries, migrations, transactional behavior
+- `skills/axl-humanize/SKILL.md` — AXL expansion, readable source summaries, or transformation-fidelity comparisons
 - `axl_agentic_coding_dsl_complete.md` — only when the task needs full DSL semantics, AXL-to-human translation rules, or PSTL/resume/compression design
 
 ## Non-goals

@@ -1,0 +1,4 @@
+interface:
+  display_name: "AXL Humanize"
+  short_description: "Expand compressed AXL without losing facts"
+  default_prompt: "Use $axl-humanize to turn this compressed AXL or source summary into readable, fact-preserving prose."

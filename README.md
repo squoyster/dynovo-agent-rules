@@ -12,6 +12,7 @@ Goal: less token noise per turn, unambiguous conflict resolution, and rules that
 
 - `AGENTS.md` — root router. Small default-load entrypoint that tells agents what to read and when.
 - `rules/base.md` — compact operational core. Default rules for planning, context control, evidence, patch discipline, verification, and closeout.
+- `skills/axl-humanize/SKILL.md` — on-demand, fact-preserving expansion and fidelity-assessment workflow.
 - `axl_agentic_coding_dsl_complete.md` — the canonical full AXL reference/spec, including rationale, schemas, examples, extension patterns, humanization rules, and PSTL context-ledger guidance.
 - `axl_agentic_coding_dsl.md` — non-canonical mirror/convenience alias of the full spec. Prefer editing `axl_agentic_coding_dsl_complete.md`.
 - `rules/*.md` — optional domain overlays (`git`, `aws`, `java-spring`, `node-react`, `postgres`, `security`, `verification`). Most are placeholders to be filled in.

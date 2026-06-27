@@ -585,6 +585,7 @@ Symbols:
 Σ := summary
 κ := checksum/hash/ref
 π := pinned invariant
+FK := fact kernel
 ```
 
 Rules:
@@ -594,6 +595,9 @@ R210: summarize(x) -> M preserve(contracts ∧ symbols ∧ decisions ∧ risks �
 R211: compressed(x) -> M attach(ref ∧ scope ∧ freshness)
 R212: stale(Σ) -> M refresh_before_use
 R213: high_risk_detail -> F summarize_without_exact_value
+R214: summarize(source) -> M derive(FK:=thesis ∧ entities_roles ∧ mechanisms ∧ invariants ∧ defaults_variants ∧ methods ∧ quantitative_claims_conditions ∧ limitations_uncertainty ∧ provenance) ≺ rewrite
+R215: rewrite(Σ) -> M preserve(required(FK) ∧ exact(values ∧ qualifiers ∧ negation ∧ causal_direction)) ∧ F promote(inference_to_fact)
+R216: compressed(Σ) -> M audit(coverage(required(FK))) ∧ M disclose(omitted_fact_classes?)
 ```
 
 Compressed summary shape:
@@ -617,7 +621,7 @@ Compression policy:
 
 ```text
 compress{
-  preserve: [public contracts, data model shape, error semantics, security-sensitive values]
+  preserve: [public contracts, data model shape, error semantics, security-sensitive values, required fact kernel]
   summarize: [large unchanged files, dependency trees, repeated logs]
   drop: [irrelevant search results, superseded plans, duplicate tool output]
   refresh_before_use: [summaries older than changed file hash]
@@ -863,7 +867,7 @@ safety ≻ platform ≻ user ≻ repo ≻ local ≻ task ≻ preference
 conflict(a,b)->choose(max_priority); tie->more_specific; unresolved->stop_report(conflict)
 
 # Required objects
-T=task; AC=acceptance criterion; p=path; Δ=changed paths; Ev=evidence; Gate=verification gate; State=durable state.
+T=task; AC=acceptance criterion; p=path; Δ=changed paths; Ev=evidence; Gate=verification gate; FK=fact kernel; State=durable state.
 
 # Global rules
 R000: all | start(T) -> M classify(T:{trivial,nontrivial,risky})
@@ -875,6 +879,8 @@ R005: assumption(c)∧high_impact(c) -> M verify(c) ∨ stop_report(c)
 R006: closeout(T) -> M run(relevant_gates(T)) ∧ verify(∀AC)
 R007: gate_fail(g) -> F claim(done) ∧ M fix_or_report(g)
 R008: context_pressure -> M compress(noncritical) ∧ pin(contracts ∧ decisions ∧ risks)
+R008a: summarize(source) -> M derive(FK) ≺ rewrite ∧ M preserve(required(FK) ∧ exact(values ∧ qualifiers ∧ negation ∧ causal_direction))
+R008b: compressed(summary) -> M attach(ref ∧ omitted_fact_classes?) ∧ M audit(coverage(required(FK)))
 R009: repeated_failure(pattern,n≥2) -> S propose(rule_update)
 R010: report(T) -> M emit(closeout{Δ,AC,gates,evidence,risks,unresolved})
 ```
@@ -1010,7 +1016,7 @@ R-HUM1: request(human_readable(x)) -> M invoke(axl-humanize,x)
 
 ```text
 HumanizeInput := {
-  content: AXL | rule_block | closeout | trace | plan | mixed_markdown,
+  content: AXL | rule_block | closeout | trace | plan | source_summary | mixed_markdown,
   audience?: developer | junior_dev | reviewer | manager | user,
   detail?: terse | normal | detailed,
   preserve_ids?: true | false,
@@ -1047,6 +1053,15 @@ mode=plain for one rule
 ```
 
 ### 26.6 Translation Contract
+
+Humanization has two contracts:
+
+```text
+AXL translation     := improve readability; preserve exact rule semantics
+source humanization := improve readability; preserve the required fact kernel
+```
+
+Humanizing a source-derived summary does not authorize another summarization pass unless the user explicitly asks for a shorter result.
 
 The translator must preserve:
 
@@ -1086,6 +1101,20 @@ R-HUM6: norm(P) -> M render_as_allowed_not_required
 R-HUM7: missing(parse(rule)) -> M mark(unparsed) ∧ F guess_silently
 R-HUM8: conflict(rules) -> M explain(conflict ∧ priority_resolution ∨ unresolved)
 ```
+
+For source summaries, derive and audit a compact fact kernel before emitting prose:
+
+```text
+FK := thesis ∧ entities_roles ∧ mechanisms ∧ invariants ∧ defaults_variants
+      ∧ methods ∧ quantitative_claims_conditions ∧ limitations_uncertainty ∧ provenance
+
+R-HUM8a: humanize(source_summary) -> M derive(FK) ≺ rewrite
+R-HUM8b: rewrite(source_summary) -> M preserve(required(FK) ∧ exact(values ∧ qualifiers ∧ negation ∧ causal_direction))
+R-HUM8c: inference(x) -> M label(inference) ∧ F present_as(source_fact)
+R-HUM8d: output(y) -> M audit(coverage(required(FK))) ∧ M disclose(omitted_fact_classes?)
+```
+
+This separates semantic fidelity from verbosity. Optional exposition may be dropped; required claims and the conditions that make them true may not.
 
 ### 26.7 Modal Translation Table
 
@@ -1247,66 +1276,15 @@ Response:
 }
 ```
 
-### 26.14 Skill File Template
+### 26.14 Skill File
 
-For frameworks that support skills, create:
+The repository ships the on-demand implementation at:
 
 ```text
 skills/axl-humanize/SKILL.md
 ```
 
-Suggested content:
-
-```markdown
-# AXL Humanize Skill
-
-Use this skill when asked to explain, expand, translate, annotate, or summarize AXL rules or agentic coding DSL blocks in human-friendly language.
-
-## Goal
-
-Translate compact AXL into clear prose while preserving exact rule meaning.
-
-## Must Preserve
-
-- Rule IDs
-- Modal force: M/F/S/P/Pref
-- Scope and trigger
-- Ordering constraints
-- Exceptions
-- Verification requirements
-- Effects and emitted outputs
-- Priority implications
-
-## Must Not Do
-
-- Do not weaken MUST into SHOULD.
-- Do not strengthen SHOULD into MUST.
-- Do not omit exceptions.
-- Do not omit verification gates.
-- Do not invent permissions.
-- Do not silently resolve ambiguous or malformed rules.
-
-## Default Behavior
-
-For one rule, provide a direct explanation.
-For multiple rules, use a table.
-For execution-oriented requests, produce a checklist.
-For debugging or review, use annotated mode.
-
-## Output Template
-
-Rule: <id>
-Applies when: <scope / trigger>
-Requirement: <required / forbidden / recommended / permitted>
-Plain English: <translation>
-Verification: <compliance check>
-Exceptions: <exceptions or none stated>
-Operational effect: <how the agent behavior changes>
-
-## Reverse Translation
-
-When converting prose to AXL, emit candidate rules with assumptions and confidence. Do not claim the result is canonical unless validated by the user or an AXL linter.
-```
+Keep procedural guidance there rather than duplicating it in the canonical spec. This preserves progressive disclosure: skill metadata is cheap, and the full fidelity workflow loads only for translation, humanization, or transformation assessment.
 
 ### 26.15 Recommended Addition to Global AXL Rules
 
@@ -1316,6 +1294,8 @@ Add this to the core DSL rules:
 R011: request(human_readable(x)) -> M translate_AXL_to_prose(x) [preserve: id,norm,scope,trigger,verify,except,effect]
 R012: translate_AXL_to_prose(x) -> F change_semantics(x)
 R013: malformed_AXL(x) -> M report(parse_error) ∧ F guess_silently
+R014: humanize(source_summary) -> M derive(FK) ≺ rewrite ∧ M audit(coverage(required(FK)))
+R015: humanize(source_summary) -> F summarize_again unless explicit
 ```
 
 This keeps the DSL compact for agents but recoverable for humans on demand.
@@ -1566,6 +1546,8 @@ summary{
   changed_files:
   open_risks:
   unresolved_questions:
+  pinned_facts?:
+  omitted_fact_classes?:
   superseded:
   next_required:
 }
@@ -1575,7 +1557,7 @@ Rules:
 
 ```text
 R-PSTL-010: seq_count(prefix)>N -> M emit(window_summary(prefix,range))
-R-PSTL-011: summary -> M include(decisions ∧ invariants ∧ risks ∧ file_refs ∧ gate_status)
+R-PSTL-011: summary -> M include(decisions ∧ invariants ∧ risks ∧ file_refs ∧ gate_status ∧ required(FK)?)
 R-PSTL-012: raw_payload_large -> M store_by_hash ∧ replace_context_with(ref ∧ summary)
 ```
 
@@ -1665,7 +1647,7 @@ R301: ctx | update(x) -> F mutate(x) ∧ M append(x') ∧ x'.supersedes=x
 R302: ctx | retrieve(q) -> M use(longest_matching_prefix(q))
 R303: ctx | context_pressure -> M load(pins ∧ latest_state ∧ summaries) ≺ raw_history
 R304: ctx | seq_count(prefix)>N -> M emit(window_summary(prefix,range))
-R305: summary(s) -> M preserve(decisions ∧ invariants ∧ risks ∧ AC ∧ Δ ∧ gates ∧ next)
+R305: summary(s) -> M preserve(decisions ∧ invariants ∧ risks ∧ AC ∧ Δ ∧ gates ∧ next ∧ required(FK)?)
 R306: after(phase) -> M emit(state/current#seq)
 R307: resume(run) -> M load(latest_state ∧ unresolved ∧ pins)
 R308: stale(summary) -> M refresh_before_reliance
@@ -2004,7 +1986,7 @@ R301: ctx | update(x) -> F mutate(x) ∧ M append(x') ∧ x'.supersedes=x
 R302: ctx | retrieve(q) -> M use(longest_matching_prefix(q))
 R303: ctx | context_pressure -> M load(pins ∧ latest_state ∧ summaries) ≺ raw_history
 R304: ctx | seq_count(prefix)>N -> M emit(window_summary(prefix,range))
-R305: summary(s) -> M preserve(decisions ∧ invariants ∧ risks ∧ AC ∧ Δ ∧ gates ∧ next)
+R305: summary(s) -> M preserve(decisions ∧ invariants ∧ risks ∧ AC ∧ Δ ∧ gates ∧ next ∧ required(FK)?)
 R306: after(phase) -> M emit(state/current#seq)
 R307: resume(run) -> M load(latest_state ∧ unresolved ∧ pins)
 R308: stale(summary) -> M refresh_before_reliance
@@ -2046,7 +2028,7 @@ R[id]: scope | trigger -> norm action [pre] [read] [verify] [except] [effect] [e
 priority: safety ≻ platform ≻ user ≻ repo ≻ local ≻ task ≻ preference
 conflict(a,b)->choose(max_priority); tie->more_specific; unresolved->stop_report(conflict)
 
-T=task; AC=acceptance criterion; p=path; Δ=changed paths; Ev=evidence; Gate=verification gate; State=durable state; CtxRec=context record.
+T=task; AC=acceptance criterion; p=path; Δ=changed paths; Ev=evidence; Gate=verification gate; FK=fact kernel; State=durable state; CtxRec=context record.
 
 R000: all | start(T) -> M classify(T:{trivial,nontrivial,risky})
 R001: nontrivial(T) -> M plan(T) ∧ map(AC,Step,Gate) ≺ edit(*)
@@ -2057,19 +2039,23 @@ R005: assumption(c)∧high_impact(c) -> M verify(c) ∨ stop_report(c)
 R006: closeout(T) -> M run(relevant_gates(T)) ∧ verify(∀AC)
 R007: gate_fail(g) -> F claim(done) ∧ M fix_or_report(g)
 R008: context_pressure -> M compress(noncritical) ∧ pin(contracts ∧ decisions ∧ risks)
+R008a: summarize(source) -> M derive(FK) ≺ rewrite ∧ M preserve(required(FK) ∧ exact(values ∧ qualifiers ∧ negation ∧ causal_direction))
+R008b: compressed(summary) -> M attach(ref ∧ omitted_fact_classes?) ∧ M audit(coverage(required(FK)))
 R009: repeated_failure(pattern,n≥2) -> S propose(rule_update)
 R010: report(T) -> M emit(closeout{Δ,AC,gates,evidence,risks,unresolved})
 
 R011: request(human_readable(x)) -> M translate_AXL_to_prose(x) [preserve: id,norm,scope,trigger,verify,except,effect]
 R012: translate_AXL_to_prose(x) -> F change_semantics(x)
 R013: malformed_AXL(x) -> M report(parse_error) ∧ F guess_silently
+R014: humanize(source_summary) -> M derive(FK) ≺ rewrite ∧ M audit(coverage(required(FK)))
+R015: humanize(source_summary) -> F summarize_again unless explicit
 
 R300: ctx | create(CtxRec) -> M key(prefix_stable ∧ semantic ∧ temporal_suffix)
 R301: ctx | update(x) -> F mutate(x) ∧ M append(x') ∧ x'.supersedes=x
 R302: ctx | retrieve(q) -> M use(longest_matching_prefix(q))
 R303: ctx | context_pressure -> M load(pins ∧ latest_state ∧ summaries) ≺ raw_history
 R304: ctx | seq_count(prefix)>N -> M emit(window_summary(prefix,range))
-R305: summary(s) -> M preserve(decisions ∧ invariants ∧ risks ∧ AC ∧ Δ ∧ gates ∧ next)
+R305: summary(s) -> M preserve(decisions ∧ invariants ∧ risks ∧ AC ∧ Δ ∧ gates ∧ next ∧ required(FK)?)
 R306: after(phase) -> M emit(state/current#seq)
 R307: resume(run) -> M load(latest_state ∧ unresolved ∧ pins)
 R308: stale(summary) -> M refresh_before_reliance
