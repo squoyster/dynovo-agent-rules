@@ -39,12 +39,25 @@ R016: after_step(Step) -> M update(PinSet) ∧ drop(nonessential_context).
 R017: edit(p) -> F rely_on(stale_memory_for_rules) ∧ M reread(governing_rules(p),current_session).
 ```
 
+## Platform correctness
+
+```axl
+R018: nontrivial(shell_command) -> M classify(subsystem:{os_package,service,firewall_network,shell_sensitive,destructive,other}) ∧ M gather(min_runtime_facts(subsystem)) ≺ run(shell_command).
+R018a: os_package_task -> M probe(/etc/os-release ∧ package_manager ∧ command_availability).
+R018b: service_task -> M probe(service_manager ∧ unit_existence ∧ status).
+R018c: firewall_network_task -> M probe(active_firewall_stack ∧ listeners ∧ interfaces ∧ relevant_rules).
+R018d: shell_sensitive_task -> M probe(shell_name ∧ shell_version ∧ command_resolution).
+R018e: destructive_task -> M probe(target_existence ∧ ownership ∧ backup_or_rollback_path).
+R018f: classify(error) -> M no_retry_before_classification ∧ F retry_failed_command_until_classified.
+R018g: shell_execution -> Pref(local_facts,model_memory) ∧ Pref(command_contracts,free_form_syntax) ∧ Pref(dry_run_or_check,trial_execution) ∧ Pref(environment_keyed_recipes,reasoning_from_scratch) ∧ Pref(short_structured_observations,raw_logs) ∧ Pref(verify_and_stop,exploratory_retries).
+```
+
 ## Human-readable translation
 
 ```axl
-R018: request(human_readable(x)) -> M read(../skills/axl-humanize/SKILL.md) ∧ translate_AXL_to_prose(x) [preserve: id,norm,scope,trigger,verify,except,effect].
-R019: translate_AXL_to_prose(x) -> F change_semantics(x).
-R019a: malformed_AXL(x) -> M report(parse_error) ∧ F guess_silently.
+R019: request(human_readable(x)) -> M read(../skills/axl-humanize/SKILL.md) ∧ translate_AXL_to_prose(x) [preserve: id,norm,scope,trigger,verify,except,effect].
+R019a: translate_AXL_to_prose(x) -> F change_semantics(x).
+R019b: malformed_AXL(x) -> M report(parse_error) ∧ F guess_silently.
 ```
 
 ## Acceptance criteria and evidence

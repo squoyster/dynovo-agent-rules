@@ -10,7 +10,7 @@ Provide compact, machine-readable agent rules that maximize utility per token an
 
 ## Canonical files
 
-- `rules/base.md` — default operational rules; read for any non-trivial task.
+- `rules/base.md` — default operational rules, including platform-correctness policy for shell-heavy work; read for any non-trivial task.
 - `skills/axl-humanize/SKILL.md` — on-demand workflow for faithful AXL expansion, source-summary humanization, and transformation-fidelity assessment.
 - `axl_agentic_coding_dsl_complete.md` — canonical full AXL reference and design spec, including humanization and PSTL context-ledger extensions; read only when extending syntax, resolving ambiguity in rule semantics, evolving the framework, or designing resumability/compression behavior.
 - `rules/*.md` — domain overlays; read only when the task materially touches that domain.
