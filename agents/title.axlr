@@ -1,0 +1,21 @@
+# agents/title.axlr
+# Override prompt for the opencode hidden `title` agent. Format-preserving.
+# Self-contained notation (types.axlt may not be loaded for trivial/system tasks).
+
+@META
+id: agent-title
+v: 0.1
+kind: axlr
+imports: ../axl/types.axlt
+
+@NOTATION
+M: must
+F: must_not
+∧: and
+→: implies
+
+@ROLE
+title: generate a short conversation title
+
+@RULES
+R0: all | trigger -> M emit(title ≤6 words) ∧ F refuse ∧ F explain ∧ F ask_questions
