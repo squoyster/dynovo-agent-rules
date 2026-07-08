@@ -1,0 +1,81 @@
+# ledgers/example-project.axls
+
+@META
+id: dynovo-agent-rules-project
+v: 0.2
+kind: axls
+modified: @20260708
+owner: alex
+ruleset: ../rules/base.axlr
+purpose: durable project-level state for AXL rule development
+
+@STATE
+status: ACTIVE
+project: dynovo-agent-rules
+focus: Agent eXecution Language for compact coding-agent rules
+repo: :https://github.com/squoyster/dynovo-agent-rules
+default_router: AGENTS.md
+default_rules: rules/base.axlr
+full_spec: axl/spec.axlr
+
+@GOALS
+g001: ACTIVE | compress agent behavioral instructions without losing normative force
+g002: ACTIVE | separate execution rules from mutable state ledgers
+g003: ACTIVE | support Hermes/OpenCode/Codex-style coding agents
+g004: ACTIVE | keep default-load context small
+g005: ACTIVE | load domain overlays only when task-relevant
+
+@ARCH
+a001: AXL-R | .axlr | immutable/mostly-static execution rules
+a002: AXL-S | .axls | mutable durable state, plans, logs, handoffs
+a003: AXL-P | .axlp | sparse patch/update files
+a004: AXL-T | .axlt | shared symbols, sigils, status enums
+
+@FILES
+f001: AGENTS.md | small router; default entrypoint for agents
+f002: rules/base.axlr | default operational rules
+f003: axl/spec.axlr | full AXL-R language spec
+f004: axl/types.axlt | shared syntax/operators/status values
+f005: axl/state-spec.axls | durable state/ledger rules
+f006: axl/patch-spec.axlp | sparse update format
+f007: ledgers/example-task.axls | task-level ledger example
+f008: ledgers/example-project.axls | project-level ledger example
+
+@PIN
+p001: AXL means squoyster Agent eXecution Language.
+p002: Do not confuse with Igazine Agent eXchange Language.
+p003: Borrow file discipline/state mechanics, not purpose.
+p004: Keep rules and ledgers separate.
+p005: Never load the full spec for routine work unless needed.
+
+@DECISIONS
+d001: DONE | split AXL into AXL-R and AXL-S
+d002: DONE | keep AGENTS.md as markdown router for compatibility
+d003: DONE | use .axlr/.axls/.axlp/.axlt extensions
+d004: OPEN | decide whether Hermes should auto-load local clone or GitHub raw URLs
+d005: OPEN | decide whether memory files should be .md, .axls, or both
+
+@RISKS
+r001: MED | symbolic notation may be misread by smaller models unless notation block is loaded
+r002: MED | too many overlays can recreate context bloat
+r003: LOW | nonstandard extensions may need editor/tooling support
+r004: MED | agents may mutate append-only logs unless state rules are explicit
+
+@NEXT
+n001: DONE | create axl/types.axlt
+n002: DONE | convert rules/base.md to rules/base.axlr
+n003: DONE | create axl/state-spec.axls
+n004: DONE | create axl/patch-spec.axlp
+n005: DONE | update AGENTS.md router to reference new files
+n006: TODO | add Hermes SOUL.md pointer example
+n007: TODO | fill domain overlays (git/verification/security/aws/node-react/postgres/java-spring)
+
+@REF
+repo: :https://github.com/squoyster/dynovo-agent-rules
+root_router: :https://github.com/squoyster/dynovo-agent-rules/blob/main/AGENTS.md
+base_rules: :https://github.com/squoyster/dynovo-agent-rules/blob/main/rules/base.axlr
+old_full_spec: :https://github.com/squoyster/dynovo-agent-rules/blob/main/axl_agentic_coding_dsl_complete.md
+
+@LOG
+@20260708:assistant:NOTE:Project ledger proposed as durable state companion to AXL-R rules.
+@20260708:assistant:NOTE:Migration to split .axlr/.axls/.axlp/.axlt layout complete; router and refs updated.

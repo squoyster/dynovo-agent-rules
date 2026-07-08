@@ -1,0 +1,57 @@
+# axl/types.axlt
+# Shared AXL type library.
+
+@META
+id: axl-types
+v: 0.4
+kind: axlt
+modified: @20260708
+
+@SYNTAX
+encoding: UTF-8
+line_endings: LF
+max_line_len: #512
+comment: first_nonspace_#
+block: @BLOCK [id]
+section: >>SECTION
+key: [a-z0-9_]{1,48}
+unknown_blocks: preserve
+
+@SIGILS
+plain: default string
+url: :https://example.com
+number: #42|#3.14
+bool: ?1|?0
+date: @YYYYMMDD|@YYYYMMDDTHHMM
+idref: $id
+envref: *ENV_VAR
+list: a|b|c
+null: ~
+draft_now: !NOW
+
+@RULE_OPERATORS
+M: must
+F: must_not
+S: should_unless_blocked
+P: may
+Pref: prefer_unless_blocked
+≺: before
+≻: higher_priority
+∧: and
+∨: or
+¬: not
+→: implies
+∀: for_all
+∃: exists
+∈: member_of
+∅: none
+∥: parallel_allowed
+⇢: produces_input_for
+⊢: justifies
+◇: eventually_before_closeout
+□: invariant
+
+@STATUS
+task: TODO|DOING|BLOCKED|DONE|SKIP
+claim: FACT|ASSUMPTION|BLOCKED|UNKNOWN
+risk: LOW|MED|HIGH

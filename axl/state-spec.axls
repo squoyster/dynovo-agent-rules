@@ -1,0 +1,39 @@
+# axl/state-spec.axls
+# AXL-S — Agent eXecution Ledger State v0.4
+
+@META
+id: axl-s-spec
+v: 0.4
+kind: axls
+modified: @20260708
+purpose: durable state, plans, handoffs, context pins, evidence, logs
+
+@COMMON_MISTAKES
+m1: Never delete @PLAN tasks; set status SKIP with note.
+m2: Never reorder @PLAN tasks; append new tasks.
+m3: Never delete @LOG entries; rotate via @LOGREF.
+m4: Never mutate @CTX source directives; record execution in @DONE_CTX.
+m5: Never store secrets inline; use *ENV_VAR.
+m6: Never invent missing source content during conversion.
+m7: Never write !NOW to disk; replace with actual @YYYYMMDDTHHMM.
+m8: Preserve unknown blocks.
+
+@FILE_RULES
+encoding: UTF-8
+line_endings: LF
+max_line_len: #512
+unknown_blocks: preserve
+comments: preserve_on_write
+blank_lines: ignored
+
+@BLOCKS
+required: @META
+optional: @STATE|@PLAN|@PIN|@CTX|@DONE_CTX|@EVIDENCE|@RISKS|@DECISIONS|@LOG|@LOGREF|@REF|@IMPORT|@LOCK
+
+@UPDATE_RULES
+plan_append_only: ?1
+log_append_only: ?1
+ctx_immutable: ?1
+unknown_preserve: ?1
+secret_inline_forbidden: ?1
+now_token_disk_forbidden: ?1

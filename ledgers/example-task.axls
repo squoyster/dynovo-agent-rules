@@ -1,0 +1,45 @@
+# ledgers/example-task.axls
+
+@META
+id: hermes-context-condense
+v: 0.4
+kind: axls
+modified: @20260708T0930
+owner: alex
+ruleset: ../rules/base.axlr
+
+@STATE
+status: DOING
+task: condense Hermes startup context and map to Hermes files
+risk: MED
+current_focus: split SOUL/config/memory/state; avoid startup bloat
+
+@PLAN
+t001: DONE | inspect Hermes config layout | ev:$e001
+t002: DONE | identify wrong AXL pointer | ev:$e002
+t003: DOING | recast AXL with state-ledger mechanics | ev:~
+t004: TODO | produce Hermes SOUL/config/memory examples | ev:~
+t005: TODO | verify final file paths against Hermes docs | ev:~
+
+@PIN
+p001: AXL means squoyster Agent eXecution Language, not Igazine Agent eXchange Language.
+p002: Use AXL-R for rules; AXL-S for durable state.
+p003: Do not load full AXL spec in routine Hermes startup.
+p004: Keep AGENTS.md as small router.
+
+@EVIDENCE
+e001: :https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+e002: :https://github.com/squoyster/dynovo-agent-rules/blob/main/AGENTS.md
+
+@DECISIONS
+d001: Keep normative execution rules separate from mutable ledgers.
+d002: Use .axlr/.axls/.axlp/.axlt to remove ambiguity.
+d003: Borrow append-only state mechanics and value sigils from Agent eXchange Language.
+
+@RISKS
+r001: HIGH | Smaller models may ignore symbolic rules unless notation block is loaded.
+r002: MED | Markdown-first agents may wrap AXL in fences; state spec forbids it.
+r003: MED | Too many overlays may recreate startup bloat.
+
+@LOG
+@20260708T0930:assistant:NOTE:Recast proposed as AXL-R rules plus AXL-S state ledgers.

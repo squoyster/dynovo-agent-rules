@@ -1,4 +1,4 @@
-# dynovo-agents-md
+# dynovo-agent-rules
 
 > **Status: experiment.** An agentic DSL built on formal-logic constructs to compress agent instructions into compact, machine-readable policy, with humanization and context-ledger extensions for explainability and resumability.
 
@@ -11,11 +11,15 @@ Goal: less token noise per turn, unambiguous conflict resolution, and rules that
 ## Contents
 
 - `AGENTS.md` — root router. Small default-load entrypoint that tells agents what to read and when.
-- `rules/base.md` — compact operational core. Default rules for planning, context control, evidence, patch discipline, verification, and closeout.
+- `rules/base.axlr` — compact operational core. Default rules for planning, context control, evidence, patch discipline, verification, and closeout.
+- `rules/*.axlr` — optional domain overlays (`git`, `aws`, `java-spring`, `node-react`, `postgres`, `security`, `verification`). Most are placeholders to be filled in.
+- `axl/spec.axlr` — full AXL-R language spec: notation, rule shape, priority model, domain objects.
+- `axl/types.axlt` — shared symbols, value sigils, and status enums.
+- `axl/state-spec.axls` — durable state/ledger file specification (AXL-S).
+- `axl/patch-spec.axlp` — sparse patch/update file specification (AXL-P). Placeholder.
+- `ledgers/example-task.axls` — task-level state ledger example.
+- `ledgers/example-project.axls` — project-level state ledger example.
 - `skills/axl-humanize/SKILL.md` — on-demand, fact-preserving expansion and fidelity-assessment workflow.
-- `axl_agentic_coding_dsl_complete.md` — the canonical full AXL reference/spec, including rationale, schemas, examples, extension patterns, humanization rules, and PSTL context-ledger guidance.
-- `axl_agentic_coding_dsl.md` — non-canonical mirror/convenience alias of the full spec. Prefer editing `axl_agentic_coding_dsl_complete.md`.
-- `rules/*.md` — optional domain overlays (`git`, `aws`, `java-spring`, `node-react`, `postgres`, `security`, `verification`). Most are placeholders to be filled in.
 - `bin/install-opencode-rules` — idempotently wires the root anchor URL into `~/.config/opencode/opencode.json[c]`.
 
 ## Install
@@ -30,6 +34,8 @@ Requires `jq` and `curl`.
 ## Credit
 
 The DOX boilerplate form was inspired by the [DOX project](https://github.com/agent0ai/dox). Go read it.
+
+Some state-ledger mechanics and value sigils are inspired by [Igazine/axl](https://github.com/Igazine/axl) (Agent eXchange Language).
 
 ## License
 

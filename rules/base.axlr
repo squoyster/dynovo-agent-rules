@@ -1,0 +1,69 @@
+# rules/base.axlr
+# Default operational rules. Load for any nontrivial task.
+
+@META
+id: base-rules
+v: 0.4
+kind: axlr
+modified: @20260708
+imports: ../axl/types.axlt
+
+@NOTATION
+M: must
+F: must_not
+S: should_unless_blocked
+P: may
+Pref: prefer_unless_blocked
+≺: before
+≻: priority
+∧: and
+∨: or
+¬: not
+→: implies
+∀: for_all
+∃: exists
+R: R[id]: scope | trigger -> norm action [pre] [read] [verify] [except] [effect] [emit]
+
+@PRIORITY
+order: safety ≻ platform_policy ≻ user_instruction ≻ repo_policy ≻ local_policy ≻ task_AC ≻ preference
+conflict: conflict(a,b)->choose(max_priority); tie->choose(more_specific); unresolved->stop_report(conflict)
+
+@RULES core
+R000: all | start(T) -> M classify(T:{trivial,nontrivial,risky})
+R001: nontrivial(T) -> M plan(T) ∧ map(AC,Step,Gate) ≺ edit(*)
+R002: trivial(T) -> P compress(plan_detail) [verify: low_risk]
+R003: implement(T) -> M verify(each_step) ≺ next_step
+R004: report(T) -> M state(assumptions ∧ actions ∧ verification ∧ unresolved?)
+
+@RULES readset
+R010: all | work_on(p) -> M read(root/AGENTS.md) ∧ comply(governing_rules(p))
+R011: edit(p) -> M read(p ∧ relevant_tests(p) ∧ governing_rules(p)) ≺ patch(p)
+R012: navigate(repo) -> M compute(ReadSet(T)) ∧ F read(unbounded_repo)
+R013: routine_read -> M prefer(indexes ∪ changed_files ∪ directly_referenced_sources ∪ directly_referenced_tests ∪ relevant_docs)
+R014: repeated_content(x) -> M replace_with(ref(x))
+R015: large(file) -> S summarize(file) ∧ pin(contracts ∧ symbols ∧ decisions ∧ risks)
+R016: after_step(Step) -> M update(PinSet) ∧ drop(nonessential_context)
+R017: edit(p) -> F rely_on(stale_memory_for_rules) ∧ M reread(governing_rules(p),current_session)
+
+@RULES platform
+R018: nontrivial(shell_command) -> M classify(subsystem:{os_package,service,firewall_network,shell_sensitive,destructive,other}) ∧ M gather(min_runtime_facts(subsystem)) ≺ run(shell_command)
+R018a: os_package_task -> M probe(/etc/os-release ∧ package_manager ∧ command_availability)
+R018b: service_task -> M probe(service_manager ∧ unit_existence ∧ status)
+R018c: firewall_network_task -> M probe(active_firewall_stack ∧ listeners ∧ interfaces ∧ relevant_rules)
+R018d: shell_sensitive_task -> M probe(shell_name ∧ shell_version ∧ command_resolution)
+R018e: destructive_task -> M probe(target_existence ∧ ownership ∧ backup_or_rollback_path)
+R018f: classify(error) -> M no_retry_before_classification ∧ F retry_failed_command_until_classified
+R018g: shell_execution -> Pref(local_facts,model_memory) ∧ Pref(command_contracts,free_form_syntax) ∧ Pref(dry_run_or_check,trial_execution) ∧ Pref(environment_keyed_recipes,reasoning_from_scratch) ∧ Pref(short_structured_observations,raw_logs) ∧ Pref(verify_and_stop,exploratory_retries)
+
+@RULES humanization
+R019: request(human_readable(x)) -> M read(../skills/axl-humanize/SKILL.md) ∧ translate_AXL_to_prose(x) [preserve: id,norm,scope,trigger,verify,except,effect]
+R019a: translate_AXL_to_prose(x) -> F change_semantics(x)
+R019b: malformed_AXL(x) -> M report(parse_error) ∧ F guess_silently
+
+@RULES evidence
+R020: has(AC) -> M create(ACM:=map(AC_i -> {steps,files,gates,evidence})) ≺ implement(T)
+R021: closeout(T) -> M verify(∀AC_i:satisfied∨blocked) ∧ emit(ACM_result)
+R022: AC_i unsatisfied -> F report(done)
+R023: claim(c) ∧ affects_code -> M backed_by(Ev) ∨ mark(assumption)
+R024: assumption(c) ∧ high_impact(c) -> M verify(c) ∨ ask_or_stop(c)
+R025: report(c) -> F present(assumption_as_fact)

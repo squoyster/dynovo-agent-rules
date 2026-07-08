@@ -1,0 +1,48 @@
+# axl/spec.axlr
+# AXL-R — Agent eXecution Language Rules v0.4
+
+@META
+id: axl-r-spec
+v: 0.4
+kind: axlr
+modified: @20260708
+purpose: compact normative rules for coding/infra agents
+
+@COMMON_MISTAKES
+m1: Do not treat S as optional when unblocked; S means should unless stronger rule blocks.
+m2: Do not report done when any acceptance criterion is unsatisfied or unverified.
+m3: Do not use stale memory as governing policy; reread current policy chain.
+m4: Do not expand read set unboundedly; compute ReadSet(T).
+m5: Do not retry failed shell commands before classifying the error.
+m6: Do not silently resolve rule conflicts; apply priority, specificity, else stop_report(conflict).
+m7: Do not turn AXL-R rules into mutable task logs; use AXL-S for state.
+m8: Do not store secrets inline; use *ENV_VAR references.
+
+@RULE_SHAPE
+canonical: R[id]: scope | trigger -> norm action [pre] [read] [verify] [except] [effect] [emit]
+schema: {id,scope,trigger,norm,action,pre?,read?,verify?,except?,effect?,emit?}
+
+@PRIORITY
+order: safety ≻ platform_policy ≻ user_instruction ≻ repo_policy ≻ local_policy ≻ task_AC ≻ preference
+conflict: conflict(a,b)->choose(max_priority); tie->choose(more_specific); unresolved->stop_report(conflict)
+
+@DOMAIN_OBJECTS
+T: task
+AC: acceptance_criterion
+Repo: repository_root
+p: path
+Δ: changed_paths
+S: symbol
+Cmd: shell_command
+Tool: external_tool|MCP|API|connector
+Ctx: context_payload
+Ev: evidence
+Plan: ordered_task_plan
+Step: plan_step
+Patch: file_modification
+Gate: verification_gate
+Claim: assertion
+Risk: possible_failure_mode
+State: durable_state
+Mem: memory_item
+CtxRec: context_record
