@@ -24,3 +24,27 @@ Non-goals:
 - Do not duplicate canonical rules across files.
 - Do not expand read set beyond the active task.
 - Do not confuse AXL-R rules with AXL-S state files.
+
+## Disclosure
+
+@DISCLOSURE
+D0: always_load = AGENTS.md
+D1: nontrivial(T) -> load(rules/base.axlr ∧ axl/types.axlt)
+D2: touches(T,domain) -> load(rules/<domain>.axlr)
+D3: resumes(T,state) ∨ handoff(T) -> load(relevant ledgers/*.axls)
+D4: edits(T,AXL_semantics) -> load(axl/spec.axlr)
+D5: writes(T,ledger) -> load(axl/state-spec.axls)
+D6: applies(T,patch) -> load(axl/patch-spec.axlp)
+F: load(all_files_recursively)
+F: load(full_spec_for_routine_work)
+F: load(domain_overlay_without_trigger)
+
+## Load budget
+
+@LOAD_BUDGET
+router: <= 200 lines
+base_rules: <= 300 lines
+types: <= 150 lines
+domain_overlay: <= 200 lines each
+ledger_summary: <= 150 lines
+full_spec: load only on explicit semantic task
