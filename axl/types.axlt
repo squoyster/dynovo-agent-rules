@@ -55,3 +55,10 @@ Pref: prefer_unless_blocked
 task: TODO|DOING|BLOCKED|DONE|SKIP
 claim: FACT|ASSUMPTION|BLOCKED|UNKNOWN
 risk: LOW|MED|HIGH
+
+@BINDING
+axl_r: executable_instruction_policy_not_documentation
+task_loop: classify_task -> identify_matching_rules -> apply_norms -> resolve_conflicts -> act -> verify -> closeout
+norms: M=required F=forbidden S=expected_unless_blocked P=allowed
+uncertain_rule_match: choose_narrower_safer_action ∧ mention_uncertainty
+closeout: before_final_answer apply(relevant_closeout_rules)

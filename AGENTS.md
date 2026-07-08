@@ -4,10 +4,13 @@ This file routes agent behavior. Keep default-load context small.
 
 AXL means Agent eXecution Language.
 
+## Placeholder notation
+`{name}` means a template placeholder, not literal path text.
+
 Load order:
 1. AGENTS.md
 2. rules/base.axlr
-3. relevant rules/<domain>.axlr only if task materially touches that domain
+3. relevant rules/{domain}.axlr only if task materially touches that domain
 4. skills/axl-humanize/SKILL.md only for AXL expansion, summarization, or fidelity checks
 5. axl/spec.axlr only when editing/extending AXL semantics
 6. axl/state-spec.axls only when writing durable ledgers or handoff files
@@ -30,7 +33,7 @@ Non-goals:
 @DISCLOSURE
 D0: always_load = AGENTS.md
 D1: nontrivial(T) -> load(rules/base.axlr ∧ axl/types.axlt)
-D2: touches(T,domain) -> load(rules/<domain>.axlr)
+D2: touches(T,domain) -> load(rules/{domain}.axlr)
 D3: resumes(T,state) ∨ handoff(T) -> load(relevant ledgers/*.axls)
 D4: edits(T,AXL_semantics) -> load(axl/spec.axlr)
 D5: writes(T,ledger) -> load(axl/state-spec.axls)
