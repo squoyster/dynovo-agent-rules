@@ -33,6 +33,11 @@ Non-goals:
 - Do not expand read set beyond the active task.
 - Do not confuse AXL-R rules with AXL-S state files.
 
+## Directive
+
+@DIRECTIVE
+At turn start: evaluate all @DISCLOSURE conditions before any other action.
+
 ## Disclosure
 
 @DISCLOSURE
