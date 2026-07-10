@@ -1,17 +1,11 @@
 # AGENTS.md
-If you are seeing this then AXL is critical for your success.
-FOLLOW ALL DIRECTIVES TO THE LETTER.  EACH RULE IS POTENTIALLY
-AN EXECUTION INSTRUCTION THAT IS CRITICAL TO THIS PROJECT.
-ALL EXECUTION INSTRUCTIONS MUST BE EVALUATED WHEN ENCOUNTERED.
-
-This file routes agent behavior. Keep default-load context small.
-
-AXL means Agent eXecution Language.
 
 ## Placeholder notation
 `{name}` means a template placeholder, not literal path text.
 
-
+GOALS:
+  process AXL rules with notation like RULE000, etc.
+  that means to perform the specified actions when they apply
 
 Load order:
 1. AGENTS.md
