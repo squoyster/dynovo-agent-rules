@@ -3,9 +3,9 @@
 
 @META
 id: axl-s-spec
-v: 0.4
+v: 0.5
 kind: axls
-modified: @20260708
+modified: @20260709
 purpose: durable state, plans, handoffs, context pins, evidence, logs
 
 @COMMON_MISTAKES
@@ -28,7 +28,7 @@ blank_lines: ignored
 
 @BLOCKS
 required: @META
-optional: @STATE|@PLAN|@PIN|@CTX|@DONE_CTX|@EVIDENCE|@RISKS|@DECISIONS|@LOG|@LOGREF|@REF|@IMPORT|@LOCK
+optional: @STATE|@PLAN|@PIN|@CTX|@CTX_INDEX|@DONE_CTX|@EVIDENCE|@RISKS|@DECISIONS|@LOG|@LOGREF|@REF|@IMPORT|@LOCK
 
 @UPDATE_RULES
 plan_append_only: ?1
@@ -37,3 +37,18 @@ ctx_immutable: ?1
 unknown_preserve: ?1
 secret_inline_forbidden: ?1
 now_token_disk_forbidden: ?1
+
+@CTX_INDEX_SPEC
+entry_required: id|kind|summary|priority|freshness|ref
+entry_optional: deps|status|supersedes
+summary_max: #160
+payload_inline_forbidden: ?1
+ref_required: ?1
+stable_id_required: ?1
+
+@CTX_INDEX_UPDATE_RULES
+entry_id_stable: ?1
+history_preserve: ?1
+supersession_explicit: ?1
+stale_mark_required: ?1
+unknown_fields_preserve: ?1

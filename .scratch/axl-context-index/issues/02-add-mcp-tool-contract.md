@@ -1,0 +1,29 @@
+Status: ready-for-agent
+
+## What to build
+
+Create an MCP/tool contract defining these logical operations:
+
+- `ctx.index(task)` → compact relevant index
+- `ctx.retrieve(ref | prefix | query)` → raw or expanded source chunk
+- `ctx.pin(record)` → add or update active pinned state
+- `ctx.summarize(raw_ref)` → concise summary plus preserved source reference
+- `ctx.trace(claim_or_decision)` → evidence and provenance chain
+- `ctx.refresh(ref)` → updated summary after source change
+
+For each operation specify: input shape, output shape, failure behavior, provenance requirements, maximum/default result size, whether results are exact source text or summaries or both, how stale results are identified, how stable references are returned.
+
+First inspect whether the repo already has a canonical place for tool or MCP contracts. Prefer the existing convention. If none exists, create `axl/mcp-spec.axlm` (or the closest existing canonical location, documented with rationale).
+
+Do not require a concrete MCP server implementation unless one already exists. A contract/specification is sufficient.
+
+## Acceptance criteria
+
+- [ ] All six operations are specified with input/output shapes
+- [ ] Failure behavior, provenance, staleness, and reference stability are defined for each
+- [ ] Contract lives in the repo's canonical location for tool specs
+- [ ] No runtime implementation required unless one already exists
+
+## Blocked by
+
+None — can start immediately.

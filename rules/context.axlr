@@ -1,0 +1,54 @@
+# rules/context.axlr
+# Context indexing, working-set control, compression, and recall.
+
+@META
+id: context-rules
+v: 0.1
+kind: axlr
+modified: @20260709
+imports: ../axl/types.axlt
+
+@RULES context
+
+RCTX001: context_task(T) | start(T)
+-> M load(active_state(T) ∧ relevant_index(T) ∧ PinSet(T) ∧ active_decisions(T) ∧ unresolved(T))
+∧ F load(raw_history(T))
+
+RCTX002: after_step(S)
+-> M update(PinSet) ∧ update(context_index,if_changed) ∧ drop(nonessential_context)
+
+RCTX003: precision_sensitive(T) ∧ relevant(x) ∧ (compressed(x) ∨ stale(x) ∨ absent(x))
+-> M retrieve(ref(x) ∨ query(x)) ≺ claim_or_patch(T)
+[verify: source_loaded(x)]
+
+RCTX004: precision_sensitive(T)
+-> M classify_required_context(T)
+[effect: exact_config ∨ side_effect_shell ∨ api_contract ∨ dependency_version ∨ file_path ∨ prior_constraint ∨ architecture_decision ∨ prior_error ∨ test_expectation ∨ security_change ∨ destructive_action]
+
+RCTX005: compress(x)
+-> M create(summary(x) ∧ ref(raw(x)) ∧ provenance(x))
+∧ M preserve(constraints(x) ∧ decisions(x) ∧ evidence(x) ∧ symbols(x) ∧ artifact_paths(x) ∧ unresolved(x))
+∧ F destroy(only_recoverable_source(x))
+
+RCTX006: rely_on(summary(x)) ∧ (stale(summary(x)) ∨ changed(source(x)))
+-> M refresh(x) ∨ retrieve(ref(x)) ≺ use(x)
+
+RCTX007: index_entry(x)
+-> M include(id(x) ∧ kind(x) ∧ summary_short(x) ∧ priority(x) ∧ freshness(x) ∧ ref(x))
+∧ P include(deps(x) ∧ status(x) ∧ supersedes(x))
+∧ F include(full_payload(x))
+
+RCTX008: required_retrieval(x) ∧ retrieve_failed(x)
+-> M report(missing_source(x) ∧ blocked_claim_or_patch)
+∧ F reconstruct_exact_content_from_memory(x)
+∧ F present(inference_as_retrieved_fact)
+
+RCTX009: conflict(a,b)
+-> M prefer(explicit_supersession(a,b))
+∨ M prefer(fresher_direct_evidence(a,b))
+∨ M preserve_conflict(a,b)
+∧ F overwrite_history_silently
+
+RCTX010: crosscut(x)
+-> M add(index_edge(x))
+∧ F duplicate_payload(x)

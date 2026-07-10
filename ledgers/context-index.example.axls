@@ -1,0 +1,52 @@
+# ledgers/context-index.example.axls
+
+@META
+id: context-index-example
+v: 0.1
+kind: axls
+modified: @20260709
+purpose: indexed recoverable agent context
+
+@STATE
+goal: G1
+step: T3
+next: inspect current provider configuration
+status: active
+
+@PIN
+C1: pri=critical ref=ctx/constraints#1 text="Recall exact source before precision-sensitive edits"
+D1: pri=high ref=ctx/decisions#1
+U1: pri=high ref=ctx/unresolved#1
+
+@CTX_INDEX
+G1: kind=goal pri=high fresh=fresh summary="Implement indexed recoverable context" ref=ctx/goal#1
+C1: kind=constraint pri=critical fresh=fresh summary="Recall before exact edits" ref=ctx/constraints#1
+D1: kind=decision pri=high fresh=fresh summary="Use active/index/archive memory layers" ref=ctx/decisions#1
+E1: kind=evidence pri=high fresh=fresh summary="Prior provider command returned no matches" ref=ctx/evidence#1
+A1: kind=artifact pri=medium fresh=unknown summary="Provider configuration file" ref=file://config/provider.yaml
+U1: kind=unresolved pri=high fresh=fresh summary="Select retrieval ranking policy" ref=ctx/unresolved#1
+D0: kind=decision pri=low fresh=stale status=superseded summary="Load full transcript by default" ref=ctx/decisions#0 supersedes=none
+
+@CTX
+CXS1: source=raw://runs/20260709/provider-config.yaml immutable=?1
+CXS2: source=raw://runs/20260709/provider-error.log immutable=?1
+
+@DECISIONS
+D0: status=superseded text="Load full transcript by default"
+D1: status=active supersedes=D0 text="Use active working set + compact index + recoverable archive" because="Reduce attention dilution and preserve exact recall"
+
+@EVIDENCE
+E1: source=raw://runs/20260709/provider-error.log freshness=fresh summary="Command returned zero matching files"
+
+@REF
+R1: id=ctx/goal#1 target=ledger://context-index.example.axls#G1
+R2: id=ctx/constraints#1 target=ledger://context-index.example.axls#C1
+R3: id=ctx/decisions#1 target=ledger://context-index.example.axls#D1
+R4: id=ctx/evidence#1 target=raw://runs/20260709/provider-error.log
+R5: id=ctx/unresolved#1 target=ledger://context-index.example.axls#U1
+
+@RISKS
+U1: status=active text="Retrieval ranking policy unresolved"
+
+@DONE_CTX
+RC1: request="exact provider syntax" source=raw://runs/20260709/provider-config.yaml result_ref=ctx/retrieved#1 at=@20260709T170000

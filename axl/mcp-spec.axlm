@@ -1,0 +1,52 @@
+# axl/mcp-spec.axlm
+
+@META
+id: context-mcp-contract
+v: 0.1
+kind: axlm
+modified: @20260709
+
+@TOOL ctx.index
+in: task|filters?
+out: index_entry[]
+default_limit: #32
+max_limit: #128
+exact: ?0
+provenance_required: ?1
+failure: explicit_error
+
+@TOOL ctx.retrieve
+in: ref|prefix|query
+out: source_chunk[]|summary[]
+default_limit: #8
+max_limit: #32
+return_mode: exact|summary|both
+stable_ref_required: ?1
+freshness_required: ?1
+provenance_required: ?1
+failure: explicit_error
+
+@TOOL ctx.pin
+in: record
+out: pin_ref
+stable_ref_required: ?1
+failure: explicit_error
+
+@TOOL ctx.summarize
+in: raw_ref
+out: summary|raw_ref|provenance|freshness
+raw_ref_required: ?1
+destructive: ?0
+failure: explicit_error
+
+@TOOL ctx.trace
+in: claim_ref|decision_ref
+out: evidence_ref[]|source_ref[]|status
+provenance_required: ?1
+failure: explicit_error
+
+@TOOL ctx.refresh
+in: ref
+out: summary|raw_ref|provenance|freshness
+freshness_required: ?1
+failure: explicit_error

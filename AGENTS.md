@@ -11,12 +11,15 @@ Load order:
 1. AGENTS.md
 2. rules/base.axlr
 3. relevant rules/{domain}.axlr only if task materially touches that domain
-4. skills/axl-humanize/SKILL.md only for AXL expansion, summarization, or fidelity checks
-5. axl/spec.axlr only when editing/extending AXL semantics
-6. axl/state-spec.axls only when writing durable ledgers or handoff files
+4. `rules/context.axlr` only when task materially touches context management, memory, retrieval, compression, handoff, or long-running agent state
+5. skills/axl-humanize/SKILL.md only for AXL expansion, summarization, or fidelity checks
+6. axl/spec.axlr only when editing/extending AXL semantics
+7. axl/state-spec.axls only when writing durable ledgers or handoff files
+8. `skills/axl-encode/SKILL.md` only for translating, compressing, normalizing, indexing, or converting non-AXL material into AXL
 
 Canonical files:
 - rules/base.axlr: default operational rules
+- rules/context.axlr: conditional context-index, compression, and recall rules
 - axl/spec.axlr: full rule-language specification
 - axl/types.axlt: shared symbols, value sigils, status enums
 - axl/state-spec.axls: durable state/ledger file specification
@@ -38,6 +41,8 @@ D3: resumes(T,state) ∨ handoff(T) -> load(relevant ledgers/*.axls)
 D4: edits(T,AXL_semantics) -> load(axl/spec.axlr)
 D5: writes(T,ledger) -> load(axl/state-spec.axls)
 D6: applies(T,patch) -> load(axl/patch-spec.axlp)
+D7: touches(T,context_management|memory|retrieval|compression|handoff|long_running_agent_state) -> load(rules/context.axlr)
+D8: encode(T,non_AXL->AXL) ∨ compress_to_AXL(T) ∨ normalize_to_AXL(T) -> load(skills/axl-encode/SKILL.md)
 F: load(all_files_recursively)
 F: load(full_spec_for_routine_work)
 F: load(domain_overlay_without_trigger)
@@ -51,3 +56,9 @@ types: <= 150 lines
 domain_overlay: <= 200 lines each
 ledger_summary: <= 150 lines
 full_spec: load only on explicit semantic task
+
+## Agent skills
+
+Issues: local markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
+Triage: `needs-triage|needs-info|ready-for-agent|ready-for-human|wontfix`. See `docs/agents/triage-labels.md`.
+Domain: single-context. See `docs/agents/domain.md`.

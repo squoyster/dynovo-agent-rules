@@ -3,9 +3,9 @@
 
 @META
 id: axl-types
-v: 0.4
+v: 0.5
 kind: axlt
-modified: @20260708
+modified: @20260709
 
 @SYNTAX
 encoding: UTF-8
@@ -55,6 +55,18 @@ Pref: prefer_unless_blocked
 task: TODO|DOING|BLOCKED|DONE|SKIP
 claim: FACT|ASSUMPTION|BLOCKED|UNKNOWN
 risk: LOW|MED|HIGH
+
+@ENUM priority
+critical|high|medium|low
+
+@ENUM freshness
+fresh|stale|unknown
+
+@ENUM record_status
+active|superseded|resolved|blocked
+
+@ENUM context_kind
+goal|constraint|decision|evidence|artifact|unresolved|plan|log|raw_source
 
 @BINDING
 axl_r: executable_instruction_policy_not_documentation

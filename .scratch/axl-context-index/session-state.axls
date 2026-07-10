@@ -1,0 +1,84 @@
+# .scratch/axl-context-index/session-state.axls
+
+@META
+id: axl-context-index-review-session
+v: 0.1
+kind: axls
+modified: @20260709
+owner: alex
+ruleset: ../../rules/base.axlr
+purpose: durable state for the repo review + issue creation + axl-encode skill addition session
+
+@STATE
+status: DONE
+task: review repo against first AXL commit; create issues; add axl-encode skill
+risk: MED
+current_focus: session complete; 6 issues ready for triage/implementation
+
+@PLAN
+t001: DONE | pin fixed point at first AXL commit 5cea6d4 | ev:$e001
+t002: DONE | capture diff 5cea6d4...HEAD and commit list | ev:$e002
+t003: DONE | identify spec source .specs/axl-context-index-agent-prompt.md | ev:$e003
+t004: DONE | spawn Standards + Spec review sub-agents in parallel | ev:$e004
+t005: DONE | aggregate findings into two-axis report | ev:$e005
+t006: DONE | draft 6 vertical-slice issues from review findings | ev:$e006
+t007: DONE | set up local issue tracker via setup-matt-pocock-skills | ev:$e007
+t008: DONE | write 6 issues to .scratch/axl-context-index/issues/ | ev:$e008
+t009: DONE | add axl-encode skill from zip; patch AGENTS.md | ev:$e009
+t010: DONE | encode session context to AXL-S ledger | ev:$e010
+
+@PIN
+p001: fixed_point = 5cea6d4 (first AXL commit, 2026-06-27)
+p002: spec = .specs/axl-context-index-agent-prompt.md
+p003: 7 commits between fixed_point and HEAD
+p004: issue tracker = local markdown under .scratch/
+p005: triage labels = needs-triage|needs-info|ready-for-agent|ready-for-human|wontfix
+p006: domain docs = single-context
+
+@EVIDENCE
+e001: git log --reverse --grep=axl | head -1 => 5cea6d4
+e002: git diff 5cea6d4...HEAD => 30 files changed across rules/axl/ledgers/agents/skills/AGENTS.md
+e003: .specs/axl-context-index-agent-prompt.md => 538-line spec with 18 acceptance criteria
+e004: Standards sub-agent => 1 hard violation (ledger_summary budget untracked) + 2 smells (Shotgun Surgery, Mysterious Name) + 1 format inconsistency (S operator)
+e005: Spec sub-agent => 2 missing (context.axlr, AGENTS.md routing) + 1 implemented (state-spec @CTX reuse) + 1 scope creep (wrong example ledgers) + 3 wrong (unnecessary types/spec changes, no MCP contract)
+e006: 6 issues drafted: 01-context-axlr, 02-mcp-contract, 03-example-ledger, 04-trim-types-spec, 05-s-operator, 06-budget-tracking
+e007: docs/agents/issue-tracker.md + triage-labels.md + domain.md created; AGENTS.md patched with 4-line Agent skills block
+e008: 6 issue files written under .scratch/axl-context-index/issues/01-06
+e009: skills/axl-encode/SKILL.md created; AGENTS.md patched with load order item 8 + disclosure D8
+e010: this ledger
+
+@DECISIONS
+d001: DONE | use local markdown issue tracker (not GitHub) per user preference
+d002: DONE | use default triage label vocabulary (no existing custom labels)
+d003: DONE | single-context domain docs (no monorepo)
+d004: DONE | keep Agent skills block in AGENTS.md to 4 lines (user: "very compact")
+d005: DONE | issues use R-CTX-NNN rule IDs and to-issues vertical-slice format
+d006: DONE | issue statuses: 01/02/05=ready-for-agent, 03/04/06=needs-triage
+d007: DONE | add axl-encode skill per APPLY.md patch instructions
+
+@RISKS
+r001: HIGH | rules/context.axlr completely missing — primary spec deliverable not implemented
+r002: MED | S operator defined inconsistently (should_unless_blocked vs should) across files
+r003: MED | load budgets declared in AGENTS.md but no enforcement mechanism exists
+r004: MED | axl/types.axlt and axl/spec.axlr may contain speculative changes (blocked by issue #01)
+r005: LOW | example ledgers (example-project.axls, example-task.axls) are not the spec's deliverable but are useful
+
+@REF
+spec: .specs/axl-context-index-agent-prompt.md
+fixed_point: :https://github.com/squoyster/dynovo-agent-rules/commit/5cea6d4
+issue_01: .scratch/axl-context-index/issues/01-create-context-axlr.md
+issue_02: .scratch/axl-context-index/issues/02-add-mcp-tool-contract.md
+issue_03: .scratch/axl-context-index/issues/03-add-context-index-example-ledger.md
+issue_04: .scratch/axl-context-index/issues/04-trim-unnecessary-types-and-spec-changes.md
+issue_05: .scratch/axl-context-index/issues/05-fix-s-operator-inconsistency.md
+issue_06: .scratch/axl-context-index/issues/06-implement-load-budget-tracking.md
+tracker_config: docs/agents/issue-tracker.md
+triage_config: docs/agents/triage-labels.md
+domain_config: docs/agents/domain.md
+encode_skill: skills/axl-encode/SKILL.md
+
+@LOG
+@20260709:assistant:NOTE:Reviewed repo against first AXL commit 5cea6d4; spawned parallel Standards+Spec sub-agents; aggregated 10 findings.
+@20260709:assistant:NOTE:Drafted 6 vertical-slice issues; set up local issue tracker; wrote issues to .scratch/axl-context-index/issues/.
+@20260709:assistant:NOTE:Added axl-encode skill from zip; patched AGENTS.md load order item 8 + disclosure D8.
+@20260709:assistant:NOTE:Encoded session context to this AXL-S ledger per axl-encode procedure E1-E9.
