@@ -49,7 +49,7 @@ evaluate all @DISCLOSURE conditions before any other action.
 RBOOT000: start(T) -> M process(D0)
 
 @DISCLOSURE
-D0: always_load = AGENTS.md ∧ process(D1)
+D0: always_load = AGENTS.md ∧ process(D1) ^ process(D8)
 D1: nontrivial(T) -> load(rules/base.axlr ∧ axl/types.axlt) ∧ process(D2)
 D2: touches(T,domain) -> load(rules/{domain}.axlr)
 D3: resumes(T,state) ∨ handoff(T) -> load(relevant ledgers/*.axls) ∧ process(D3)
