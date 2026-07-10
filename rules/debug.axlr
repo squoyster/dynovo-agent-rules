@@ -1,0 +1,19 @@
+# rules/debug.axlr
+# Debug instrumentation for AXL rule evaluation.
+
+@META
+id: debug-rules
+v: 0.1
+kind: axlr
+modified: @20260709
+imports: ../axl/types.axlt
+
+@RULES debug
+R026: all | start(turn) ∧ env(*AXL_DEBUG)∈{1,true,on,rules} -> M enable(axl_debug)
+R026a: axl_debug -> M track(rule_evaluation:{matched,applied,suppressed,blocked,conflicted})
+R026b: axl_debug ∧ closeout(turn) -> M emit_once(axl_debug_line) [position: final_line]
+R026c: axl_debug_line -> M format("AXL_DEBUG m={matched_ids};a={applied_ids};s={suppressed_ids};b={blocked_ids};c={conflicts}")
+R026d: axl_debug_line -> M single_physical_line ∧ F emit(rule_prose ∨ hidden_reasoning ∨ internal_chain_of_thought)
+R026e: axl_debug ∧ no_rule_matches -> M emit("AXL_DEBUG m=-;a=-;s=-;b=-;c=-")
+R026f: env(*AXL_DEBUG)∈{~,0,false,off} -> F emit(axl_debug_line)
+R026g: axl_debug_line ∧ sensitive(rule_metadata) -> M redact(sensitive_fields) ∧ preserve(rule_ids ∧ evaluation_state)

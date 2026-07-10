@@ -35,6 +35,46 @@ R002: trivial(T) -> P compress(plan_detail) [verify: low_risk]
 R003: implement(T) -> M verify(each_step) ≺ next_step
 R004: report(T) -> M state(assumptions ∧ actions ∧ verification ∧ unresolved?)
 
+@RULES work_density
+R005: executable(T) -> M optimize(plan(T),completed_work_per_interaction) [subject_to: safety ∧ correctness ∧ task_AC]
+R005a: plan(T) -> Pref(few_coherent_steps,many_micro_steps) ∧ Pref(batch_artifact,per_item_instruction)
+R005b: repeated_equivalent_action(items) -> M identify(shared_operation ∧ varying_inputs) ∧ S encode(varying_inputs,manifest|list|query|script|patch)
+R005c: compatible(actions) ∧ independent(actions) -> S batch(actions) ∨ parallelize(actions)
+R005d: compatible(tool_calls) ∧ independent(tool_calls) -> Pref(single_batched_call,sequential_calls)
+R005e: operation(items) -> F invoke_once_per_item [except: required_by_tool ∨ failure_isolation_needed ∨ item_specific_semantics]
+R005f: inspect(items) -> Pref(single_inventory_pass,repeated_discovery) ∧ M retain(relevant_inventory)
+R005g: mutate(items) -> Pref(one_coherent_execution,interleaved_discovery_and_mutation) [pre: sufficient_inventory ∧ bounded_target_set]
+R005h: verify(batch) -> M verify(batch_result ∧ exceptions ∧ task_AC) ∧ Pref(aggregate_evidence,redundant_per_item_output)
+R005i: report(batch) -> M emit(actions ∧ failures ∧ skips ∧ aggregate_verification) ∧ F narrate(routine_micro_steps)
+
+R006: batch_candidate(actions) -> M partition(actions,compatibility ∧ dependency ∧ risk ∧ rollback_boundary)
+R006a: same_partition(actions) -> S execute_as_unit(actions)
+R006b: dependency(a,b) -> M order(a ≺ b) ∧ F parallelize(a,b)
+R006c: heterogeneous_semantics(actions) -> F batch_without_explicit_mapping(actions)
+R006d: batch_increases_blast_radius(actions) ∧ ¬rollback_available -> M reduce_batch_size(actions)
+R006e: partial_failure(batch) -> M identify(failed_subset ∧ completed_subset) ∧ F rerun(completed_subset)
+R006f: retry(batch) -> M classify(error) ∧ retry(minimal_failed_subset)
+
+R007: repeated_shell_operation(items) -> Pref(manifest|stdin|xargs|find_exec|loop|generated_script,manual_command_sequence)
+R007a: shell_batch(items) -> M quote(inputs) ∧ preserve(item_boundaries) ∧ reject(ambiguous_expansion)
+R007b: generated_execution_artifact(x) -> M make(x,inspectable ∧ deterministic ∧ idempotent_when_possible)
+R007c: destructive_batch -> M dry_run_or_preview ≺ execute ∧ M establish(rollback_or_recovery)
+R007d: non_destructive_batch ∧ low_risk -> P omit(dry_run) [verify: bounded_targets ∧ deterministic_command]
+R007e: large_output(batch) -> M summarize(success_count ∧ failure_count ∧ skipped_count ∧ material_deltas) ∧ F emit(unbounded_routine_output)
+
+R008: copy(unrelated_paths,destination) -> M inventory(source_set ∧ destination ∧ preservation_requirements) ≺ execute(copy)
+R008a: copy(unrelated_paths,destination) -> Pref(manifest_driven_copy,per_path_copy_commands)
+R008b: copy(source_set,destination) -> M define(path_mapping ∧ overwrite_policy ∧ symlink_policy ∧ metadata_policy)
+R008c: copy(source_set,destination) ∧ tool_supports_batch -> S execute(single_batch_command)
+R008d: copy(source_set,destination) ∧ overwrite_risk -> M preview(change_set) ≺ execute(copy)
+R008e: closeout(copy) -> M verify(source_coverage ∧ destination_presence ∧ failures ∧ byte_or_count_consistency)
+R008f: copy(source_set,destination) -> F delete(destination_content) [except: user_instruction(delete_or_mirror) ∧ previewed ∧ recoverable]
+
+R009: user_requests_execution(T) ∧ sufficient_context(T) -> M proceed(T) ∧ F ask_confirmation_for_routine_low_risk_choices
+R009a: ambiguity(T) ∧ outcome_equivalent(options) -> M choose(safest_conventional_option) ∧ record(assumption)
+R009b: ambiguity(T) ∧ materially_changes_outcome(options) -> M inspect_or_infer_from_local_facts ∨ ask_or_stop(T)
+R009c: blocked(item_i) ∧ independent(remaining_items) -> M continue(remaining_items) ∧ report(blocked(item_i))
+
 @RULES readset
 R010: all | work_on(p) -> M read(root/AGENTS.md) ∧ comply(governing_rules(p))
 R011: edit(p) -> M read(p ∧ relevant_tests(p) ∧ governing_rules(p)) ≺ patch(p)
