@@ -1,109 +1,112 @@
 # rules/base.axlr
-# Default operational rules. Load for any nontrivial task.
+# Always-loaded operational and software-development policy.
 
 @META
 id: base-rules
-v: 0.4
+v: 0.5
 kind: axlr
-modified: @20260708
+modified: @20260710
 imports: ../axl/types.axlt
 
-@NOTATION
-M: must
-F: must_not
-S: should_unless_blocked
-P: may
-Pref: prefer_unless_blocked
-≺: before
-≻: priority
-∧: and
-∨: or
-¬: not
-→: implies
-∀: for_all
-∃: exists
-R: R[id]: scope | trigger -> norm action [pre] [read] [verify] [except] [effect] [emit]
-
 @PRIORITY
-order: safety ≻ platform_policy ≻ user_instruction ≻ repo_policy ≻ local_policy ≻ task_AC ≻ preference
-conflict: conflict(a,b)->choose(max_priority); tie->choose(more_specific); unresolved->stop_report(conflict)
+order: safety ≻ platform_policy ≻ user_instruction ≻ repo_policy ≻ local_policy ≻ acceptance_criteria ≻ preference
+tie_1: narrower_scope
+tie_2: more_specific_trigger
+unresolved: stop_and_report
 
 @RULES core
-R000: all | start(T) -> M classify(T:{trivial,nontrivial,risky})
-R001: nontrivial(T) -> M plan(T) ∧ map(AC,Step,Gate) ≺ edit(*)
-R002: trivial(T) -> P compress(plan_detail) [verify: low_risk]
-R003: implement(T) -> M verify(each_step) ≺ next_step
-R004: report(T) -> M state(assumptions ∧ actions ∧ verification ∧ unresolved?)
-
-@RULES work_density
-R005: executable(T) -> M optimize(plan(T),completed_work_per_interaction) [subject_to: safety ∧ correctness ∧ task_AC]
-R005a: plan(T) -> Pref(few_coherent_steps,many_micro_steps) ∧ Pref(batch_artifact,per_item_instruction)
-R005b: repeated_equivalent_action(items) -> M identify(shared_operation ∧ varying_inputs) ∧ S encode(varying_inputs,manifest|list|query|script|patch)
-R005c: compatible(actions) ∧ independent(actions) -> S batch(actions) ∨ parallelize(actions)
-R005d: compatible(tool_calls) ∧ independent(tool_calls) -> Pref(single_batched_call,sequential_calls)
-R005e: operation(items) -> F invoke_once_per_item [except: required_by_tool ∨ failure_isolation_needed ∨ item_specific_semantics]
-R005f: inspect(items) -> Pref(single_inventory_pass,repeated_discovery) ∧ M retain(relevant_inventory)
-R005g: mutate(items) -> Pref(one_coherent_execution,interleaved_discovery_and_mutation) [pre: sufficient_inventory ∧ bounded_target_set]
-R005h: verify(batch) -> M verify(batch_result ∧ exceptions ∧ task_AC) ∧ Pref(aggregate_evidence,redundant_per_item_output)
-R005i: report(batch) -> M emit(actions ∧ failures ∧ skips ∧ aggregate_verification) ∧ F narrate(routine_micro_steps)
-
-R006: batch_candidate(actions) -> M partition(actions,compatibility ∧ dependency ∧ risk ∧ rollback_boundary)
-R006a: same_partition(actions) -> S execute_as_unit(actions)
-R006b: dependency(a,b) -> M order(a ≺ b) ∧ F parallelize(a,b)
-R006c: heterogeneous_semantics(actions) -> F batch_without_explicit_mapping(actions)
-R006d: batch_increases_blast_radius(actions) ∧ ¬rollback_available -> M reduce_batch_size(actions)
-R006e: partial_failure(batch) -> M identify(failed_subset ∧ completed_subset) ∧ F rerun(completed_subset)
-R006f: retry(batch) -> M classify(error) ∧ retry(minimal_failed_subset)
-
-R007: repeated_shell_operation(items) -> Pref(manifest|stdin|xargs|find_exec|loop|generated_script,manual_command_sequence)
-R007a: shell_batch(items) -> M quote(inputs) ∧ preserve(item_boundaries) ∧ reject(ambiguous_expansion)
-R007b: generated_execution_artifact(x) -> M make(x,inspectable ∧ deterministic ∧ idempotent_when_possible)
-R007c: destructive_batch -> M dry_run_or_preview ≺ execute ∧ M establish(rollback_or_recovery)
-R007d: non_destructive_batch ∧ low_risk -> P omit(dry_run) [verify: bounded_targets ∧ deterministic_command]
-R007e: large_output(batch) -> M summarize(success_count ∧ failure_count ∧ skipped_count ∧ material_deltas) ∧ F emit(unbounded_routine_output)
-
-R008: copy(unrelated_paths,destination) -> M inventory(source_set ∧ destination ∧ preservation_requirements) ≺ execute(copy)
-R008a: copy(unrelated_paths,destination) -> Pref(manifest_driven_copy,per_path_copy_commands)
-R008b: copy(source_set,destination) -> M define(path_mapping ∧ overwrite_policy ∧ symlink_policy ∧ metadata_policy)
-R008c: copy(source_set,destination) ∧ tool_supports_batch -> S execute(single_batch_command)
-R008d: copy(source_set,destination) ∧ overwrite_risk -> M preview(change_set) ≺ execute(copy)
-R008e: closeout(copy) -> M verify(source_coverage ∧ destination_presence ∧ failures ∧ byte_or_count_consistency)
-R008f: copy(source_set,destination) -> F delete(destination_content) [except: user_instruction(delete_or_mirror) ∧ previewed ∧ recoverable]
-
-R009: user_requests_execution(T) ∧ sufficient_context(T) -> M proceed(T) ∧ F ask_confirmation_for_routine_low_risk_choices
-R009a: ambiguity(T) ∧ outcome_equivalent(options) -> M choose(safest_conventional_option) ∧ record(assumption)
-R009b: ambiguity(T) ∧ materially_changes_outcome(options) -> M inspect_or_infer_from_local_facts ∨ ask_or_stop(T)
-R009c: blocked(item_i) ∧ independent(remaining_items) -> M continue(remaining_items) ∧ report(blocked(item_i))
+RCORE001: all | start(T) -> M classify(T,trivial|nontrivial|risky)
+RCORE002: nontrivial | before_edit(T) -> M create_short_plan(T)
+RCORE003: nontrivial | plan_created(T) -> M map_acceptance_criteria_to_steps_and_gates
+RCORE004: implementation | after_step(Step) -> M verify_step_result(Step)
+RCORE005: all | user_requests_execution(T) ∧ sufficient_context(T) -> M proceed(T)
+RCORE006: all | routine_low_risk_choice(T) -> F ask_for_confirmation
+RCORE007: all | outcome_equivalent_options(T) -> M choose_safest_conventional_option_and_record_assumption
+RCORE008: all | material_ambiguity(T) -> M inspect_local_facts
+RCORE009: all | material_ambiguity_unresolved(T) -> M ask_or_stop
+RCORE010: all | blocked_item_with_independent_work(T) -> M continue_independent_work_and_report_blocker
+RCORE011: all | final_report(T) -> M state_actions_verification_assumptions_and_unresolved
+RCORE012: all | report_claim(Claim) -> F present_assumption_as_fact
 
 @RULES readset
-R010: all | work_on(p) -> M read(root/AGENTS.md) ∧ comply(governing_rules(p))
-R011: edit(p) -> M read(p ∧ relevant_tests(p) ∧ governing_rules(p)) ≺ patch(p)
-R012: navigate(repo) -> M compute(ReadSet(T)) ∧ F read(unbounded_repo)
-R013: routine_read -> M prefer(indexes ∪ changed_files ∪ directly_referenced_sources ∪ directly_referenced_tests ∪ relevant_docs)
-R014: repeated_content(x) -> M replace_with(ref(x))
-R015: large(file) -> S summarize(file) ∧ pin(contracts ∧ symbols ∧ decisions ∧ risks)
-R016: after_step(Step) -> M update(PinSet) ∧ drop(nonessential_context)
-R017: edit(p) -> F rely_on(stale_memory_for_rules) ∧ M reread(governing_rules(p),current_session)
+RREAD001: all | work_on(Path) -> M read_governing_agents_files(Path)
+RREAD002: all | edit(Path) -> M read_target_tests_and_governing_rules(Path) ≺ patch(Path)
+RREAD003: all | navigate(Repo) -> M compute_bounded_read_set
+RREAD004: all | navigate(Repo) -> F read_repository_unboundedly
+RREAD005: all | repeated_payload(X) -> M replace_payload_with_reference(X)
+RREAD006: all | large_source(X) -> S retain_contracts_symbols_decisions_and_risks
+RREAD007: all | edit(Path) -> F use_stale_memory_as_governing_policy
+
+@RULES work_density
+RWORK001: all | equivalent_independent_actions(Items) -> S batch_or_parallelize(Items)
+RWORK002: all | dependency(A,B) -> M order(A ≺ B)
+RWORK003: all | dependency(A,B) -> F parallelize(A,B)
+RWORK004: all | heterogeneous_actions(Items) -> F batch_without_explicit_mapping
+RWORK005: all | batch_increases_blast_radius(Items) -> M reduce_batch_size [except: rollback_available]
+RWORK006: all | partial_batch_failure(Items) -> M retry_only_failed_subset
+RWORK007: all | retry(Failure) -> M classify_failure_first
+RWORK008: all | generated_execution_artifact(X) -> M make_deterministic_and_inspectable(X)
+RWORK009: all | destructive_batch(Items) -> M preview_and_establish_recovery ≺ execute(Items)
+RWORK010: all | large_tool_output(X) -> M summarize_counts_failures_and_material_deltas
 
 @RULES platform
-R018: nontrivial(shell_command) -> M classify(subsystem:{os_package,service,firewall_network,shell_sensitive,destructive,other}) ∧ M gather(min_runtime_facts(subsystem)) ≺ run(shell_command)
-R018a: os_package_task -> M probe(/etc/os-release ∧ package_manager ∧ command_availability)
-R018b: service_task -> M probe(service_manager ∧ unit_existence ∧ status)
-R018c: firewall_network_task -> M probe(active_firewall_stack ∧ listeners ∧ interfaces ∧ relevant_rules)
-R018d: shell_sensitive_task -> M probe(shell_name ∧ shell_version ∧ command_resolution)
-R018e: destructive_task -> M probe(target_existence ∧ ownership ∧ backup_or_rollback_path)
-R018f: classify(error) -> M no_retry_before_classification ∧ F retry_failed_command_until_classified
-R018g: shell_execution -> Pref(local_facts,model_memory) ∧ Pref(command_contracts,free_form_syntax) ∧ Pref(dry_run_or_check,trial_execution) ∧ Pref(environment_keyed_recipes,reasoning_from_scratch) ∧ Pref(short_structured_observations,raw_logs) ∧ Pref(verify_and_stop,exploratory_retries)
-
-@RULES humanization
-R019: request(human_readable(x)) -> M read(../skills/axl-humanize/SKILL.md) ∧ translate_AXL_to_prose(x) [preserve: id,norm,scope,trigger,verify,except,effect]
-R019a: translate_AXL_to_prose(x) -> F change_semantics(x)
-R019b: malformed_AXL(x) -> M report(parse_error) ∧ F guess_silently
+RPLAT001: all | nontrivial_shell_command(Cmd) -> M classify_shell_subsystem(Cmd)
+RPLAT002: all | before_shell_command(Cmd) -> M gather_minimum_runtime_facts(Cmd)
+RPLAT003: os_package | gather_runtime_facts -> M probe_os_package_manager_and_command
+RPLAT004: service | gather_runtime_facts -> M probe_service_manager_unit_and_status
+RPLAT005: firewall_network | gather_runtime_facts -> M probe_firewall_listeners_interfaces_and_rules
+RPLAT006: shell_sensitive | gather_runtime_facts -> M probe_shell_version_and_command_resolution
+RPLAT007: destructive | gather_runtime_facts -> M probe_target_owner_and_recovery_path
+RPLAT008: all | shell_batch(Items) -> M quote_inputs_and_preserve_item_boundaries
+RPLAT009: all | command_failed(Cmd) -> M classify_failure(Cmd) ≺ retry(Cmd)
+RPLAT010: all | command_failed(Cmd) -> F retry_before_failure_classification
+RPLAT011: all | choose_shell_evidence -> Pref local_runtime_facts_over_model_memory
+RPLAT012: all | command_verified(Cmd) -> S stop_exploratory_retries
 
 @RULES evidence
-R020: has(AC) -> M create(ACM:=map(AC_i -> {steps,files,gates,evidence})) ≺ implement(T)
-R021: closeout(T) -> M verify(∀AC_i:satisfied∨blocked) ∧ emit(ACM_result)
-R022: AC_i unsatisfied -> F report(done)
-R023: claim(c) ∧ affects_code -> M backed_by(Ev) ∨ mark(assumption)
-R024: assumption(c) ∧ high_impact(c) -> M verify(c) ∨ ask_or_stop(c)
-R025: report(c) -> F present(assumption_as_fact)
+REVID001: all | acceptance_criteria_exist(T) -> M create_acceptance_evidence_map(T)
+REVID002: all | closeout(T) -> M verify_each_acceptance_criterion
+REVID003: all | acceptance_criterion_unsatisfied(T) -> F report_done
+REVID004: all | code_affecting_claim(Claim) -> M attach_evidence_or_mark_assumption
+REVID005: all | high_impact_assumption(Claim) -> M verify_or_ask
+REVID006: all | verification_failure(T) -> M report_exact_failure_and_remaining_work
+REVID007: all | verification_failure(T) -> F hide_or_skip_failure
+
+@RULES rigorous_development
+RDEV001: software_change | before_work(T) -> M verify_clean_tree_reproducible_build_and_baseline_tests
+RDEV002: software_change | baseline_gate_failed(T) -> M abort(T)
+RDEV003: software_change | before_implementation(T) -> M require_approved_specification
+RDEV004: software_change | approved_specification(T) -> M require_objective_acceptance_out_of_scope_components_and_tests
+RDEV005: software_change | behavior_change(T) -> M create_failing_test_before_production_edit
+RDEV006: software_change | red_gate(T) -> M retain_failure_log_commit_and_changed_files
+RDEV007: test_author | work(T) -> M edit_only_tests_and_fixtures
+RDEV008: test_author | work(T) -> F edit_production_code
+RDEV009: implementer | green_gate(T) -> M make_smallest_change_that_satisfies_red
+RDEV010: implementer | green_gate(T) -> F edit_red_tests
+RDEV011: implementer | green_gate(T) -> F weaken_assertions_or_disable_tests
+RDEV012: implementer | green_gate(T) -> F make_unrelated_refactor
+RDEV013: implementer | green_complete(T) -> M retain_targeted_passing_log
+RDEV014: implementer | refactor_gate(T) -> M preserve_observable_behavior_and_run_regression_suite
+RDEV015: coordinator | production_implementation(T) -> F edit_production_code [except: workflow_infrastructure]
+RDEV016: coordinator | failed_gate(T) -> F waive_gate
+RDEV017: reviewer | review(T) -> F modify_workspace
+RDEV018: all | before_promotion(T) -> M use_separate_reviewer_instance
+RDEV019: all | before_promotion(T) -> M run_specification_and_engineering_review
+RDEV020: all | blocking_review_finding(T) -> M block_promotion
+RDEV021: all | repository_validation(T) -> M run_configured_format_lint_analysis_and_tests
+RDEV022: all | repository_validation_failure(T) -> F promote_or_merge
+RDEV023: all | integrate(T) -> M require_all_gates_review_approval_green_ci_and_clean_history
+RDEV024: all | human_override(T) -> M log_actor_reason_scope_and_time
+RDEV025: all | enforce_requirement(T) -> M use_strongest_mechanism_within_task_authority
+RDEV026: all | enforcement_unavailable(T) -> M explain_reason_alternative_and_advisory_status
+RDEV027: all | complete_software_task(T) -> M retain_spec_plan_red_green_review_ci_and_summary
+RDEV028: all | repository_work(T) -> F commit_secrets_or_disable_ci
+RDEV029: all | parallel_agent_work(T) -> S use_isolated_worktree
+RDEV030: all | create_commit(T) -> S make_atomic_conventional_commit
+RDEV031: all | materially_ambiguous_requirement(T) -> F invent_requirement
+RDEV032: all | requested_shortcut_violates_gate(T) -> M refuse_name_gate_and_offer_compliant_alternative
+
+@RULES humanization
+RHUM001: all | request_human_readable_axl(T) -> M load(skills/axl-humanize/SKILL.md)
+RHUM002: all | translate_axl_to_prose(T) -> F change_rule_semantics
+RHUM003: all | malformed_axl(T) -> M report_parse_error

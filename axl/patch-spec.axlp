@@ -1,0 +1,50 @@
+# axl/patch-spec.axlp
+# AXL-P sparse updates for AXL-S state. Patches are data, not executable policy.
+
+@META
+id: axl-p-spec
+v: 0.1
+kind: axlp
+modified: @20260710
+purpose: deterministic recoverable updates to durable AXL-S records
+
+@FILE_RULES
+encoding: UTF-8
+line_endings: LF
+max_line_len: #512
+unknown_fields: reject
+secret_inline_forbidden: ?1
+
+@PATCH_FIELDS
+required: id|target|op|pre|effect
+optional: value|old_ref|new_ref|reason|evidence_ref
+
+@OPERATIONS
+set: replace one mutable field
+append: add one append_only record
+supersede: preserve old record and mark replacement
+mark: change status or freshness only
+remove: allowed only where target spec permits deletion
+
+@RECORD
+shape: id target=$stable_id op=set|append|supersede|mark|remove pre="condition" effect="expected state" optional_fields...
+one_operation_per_record: ?1
+stable_target_required: ?1
+explicit_precondition_required: ?1
+explicit_effect_required: ?1
+
+@APPLY
+A1: parse_and_validate_patch
+A2: resolve_exact_target
+A3: verify_precondition
+A4: preserve_old_ref_when_recovery_matters
+A5: apply_one_operation
+A6: verify_expected_effect
+A7: append_evidence
+
+@FAILURE
+missing_target: stop_without_mutation
+ambiguous_target: stop_without_mutation
+failed_precondition: stop_without_mutation
+failed_effect: report_and_restore_when_possible
+unknown_operation: reject

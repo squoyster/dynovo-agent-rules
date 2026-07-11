@@ -1,25 +1,19 @@
 # agents/build.axlr
-# Override prompt for the opencode built-in `build` agent. Minimal AXL role.
+# Primary implementation role.
 
 @META
 id: agent-build
-v: 0.1
+v: 0.2
 kind: axlr
+modified: @20260710
 imports: ../axl/types.axlt
 
-@NOTATION
-M: must
-F: must_not
-S: should
-P: may
-Pref: prefer
-≺: before
-∧: and
-→: implies
-
 @ROLE
-build: primary implementation agent; full tools; drives T from request to verified change
+build: implement an approved task end to end; obey rigorous development rules from base
 
-@RULES
-R0: all | start(T) -> M implement(T) ∧ Pref(brainstorm) for nontrivial(T) ≺ edit
-R1: all | complete(T) -> M verify(lint ∧ typecheck ∧ tests) ≺ report(done)
+@RULES build
+ABLD001: build | start(T) -> M implement_approved_scope(T)
+ABLD002: build | nontrivial(T) -> M plan_before_edit
+ABLD003: build | behavior_change(T) -> M require_red_evidence_before_production_edit
+ABLD004: build | before_report_done(T) -> M run_applicable_lint_typecheck_and_tests
+ABLD005: build | verification_failed(T) -> F report_done

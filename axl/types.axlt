@@ -1,24 +1,21 @@
 # axl/types.axlt
-# Shared AXL type library.
+# Small always-loaded AXL vocabulary and execution kernel.
 
 @META
 id: axl-types
-v: 0.5
+v: 0.6
 kind: axlt
-modified: @20260709
+modified: @20260710
 
 @SYNTAX
 encoding: UTF-8
 line_endings: LF
 max_line_len: #512
 comment: first_nonspace_#
-block: @BLOCK [id]
-section: >>SECTION
 key: [a-z0-9_]{1,48}
 unknown_blocks: preserve
 
 @SIGILS
-plain: default string
 url: :https://example.com
 number: #42|#3.14
 bool: ?1|?0
@@ -29,27 +26,33 @@ list: a|b|c
 null: ~
 draft_now: !NOW
 
-@RULE_OPERATORS
-M: must
-F: must_not
-S: should_unless_blocked
-P: may
-Pref: prefer_unless_blocked
+@NORMS
+M: must_do_or_report_blocked
+F: must_not_do
+S: should_do_unless_higher_priority_rule_blocks
+P: allowed_not_required
+Pref: prefer_first_option_over_second_unless_blocked
+
+@OPERATORS
 ≺: before
 ≻: higher_priority
 ∧: and
 ∨: or
 ¬: not
-→: implies
-∀: for_all
-∃: exists
 ∈: member_of
-∅: none
-∥: parallel_allowed
-⇢: produces_input_for
-⊢: justifies
-◇: eventually_before_closeout
-□: invariant
+⊢: justified_by
+
+@EVALUATION
+E1: load_only_files_selected_by_router
+E2: scan_loaded_rules_top_to_bottom
+E3: match_scope_and_trigger
+E4: skip_rule_when_except_is_true
+E5: satisfy_pre_and_read_before_action
+E6: apply_exactly_one_norm
+E7: resolve_conflict_by_priority_then_specificity
+E8: stop_and_report_unresolved_conflict
+E9: satisfy_verify_before_claiming_done
+E10: apply_closeout_rules_before_final_output
 
 @STATUS
 task: TODO|DOING|BLOCKED|DONE|SKIP
@@ -67,10 +70,3 @@ active|superseded|resolved|blocked
 
 @ENUM context_kind
 goal|constraint|decision|evidence|artifact|unresolved|plan|log|raw_source
-
-@BINDING
-axl_r: executable_instruction_policy_not_documentation
-task_loop: classify_task -> identify_matching_rules -> apply_norms -> resolve_conflicts -> act -> verify -> closeout
-norms: M=required F=forbidden S=expected_unless_blocked P=allowed
-uncertain_rule_match: choose_narrower_safer_action ∧ mention_uncertainty
-closeout: before_final_answer apply(relevant_closeout_rules)

@@ -85,9 +85,6 @@ higher_priority       -> ≻
 and                   -> ∧
 or                    -> ∨
 not                   -> ¬
-implies               -> →
-for_each              -> ∀
-exists                -> ∃
 ```
 
 Use canonical symbols from `axl/types.axlt`; do not mint aliases when one exists.
@@ -97,13 +94,7 @@ Use canonical symbols from `axl/types.axlt`; do not mint aliases when one exists
 Use canonical rule shape:
 
 ```axl
-R[id]: scope | trigger -> norm action
-[pre: ...]
-[read: ...]
-[verify: ...]
-[except: ...]
-[effect: ...]
-[emit: ...]
+RULE_ID: scope | trigger -> norm action [pre: ...] [read: ...] [verify: ...] [except: ...] [effect: ...] [emit: ...]
 ```
 
 Rules:
@@ -112,8 +103,9 @@ Rules:
 M stable(rule_id)
 M explicit(scope ∧ trigger ∧ norm ∧ action)
 M preserve(ordering ∧ priority ∧ exceptions ∧ verification)
-S one_primary_obligation_per_rule
-S split(compound_rule) when independent failure/reporting is useful
+M one_physical_line_per_rule
+M one_modal_norm_per_rule
+M split(compound_rule) when obligations can fail independently
 F bury(normative_requirement,in prose_comment)
 F encode(example_as_rule)
 ```
@@ -200,10 +192,10 @@ F claim(summary_is_source)
 ## Ambiguity and loss handling
 
 ```axl
-ambiguous(x) -> M emit(@RISKS|parse_error|unresolved(x)) ∧ F guess_silently
-conflict(a,b) -> M preserve(a ∧ b) ∧ M mark(conflict) ∧ P identify(precedence_if_explicit)
-missing(x) -> M mark(unknown|absent) ∧ F fabricate(x)
-loss_required(limit) -> M retain(critical_FK) ∧ M disclose(omitted_classes)
+ambiguous(x): emit @RISKS or parse_error; do not guess
+conflict(a,b): preserve both; mark conflict; use only explicit precedence
+missing(x): mark unknown or absent; do not fabricate
+loss_required(limit): retain critical facts and disclose omitted classes
 ```
 
 ## Translation procedure
@@ -231,6 +223,7 @@ V5: all_refs_resolvable_or_marked_external
 V6: no_payload_duplication_without_reason
 V7: output_kind_matches_semantics
 V8: conforms(canonical_spec)
+V9: one_physical_line_and_one_modal_norm_per_rule
 ```
 
 On validation failure:

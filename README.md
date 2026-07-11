@@ -4,23 +4,34 @@
 
 ## What this is
 
-An experiment in expressing agent instructions as a tiny formal language (`AXL`) instead of prose. Modal and deontic operators (`□` always, `◇` before closeout, `M` must, `F` must-not, `S` should, `P` may, `→` implies, `≻` priority) let rules be parsed, prioritized, and resolved deterministically rather than re-read as English every turn.
+An experiment in expressing agent instructions as a tiny formal language (`AXL`) instead of prose. A deliberately small norm and operator set lets rules be scanned, prioritized, and resolved deterministically rather than re-read as English every turn.
 
-Goal: less token noise per turn, unambiguous conflict resolution, and rules that survive being moved between agents/sessions.
+Goal: less default prompt noise, deterministic rule evaluation, and policies that remain usable by small models and across sessions.
+
+## Weak-model profile
+
+Active AXL-R uses one physical line per rule, an explicit `scope | trigger`, one
+modal norm, and a fixed qualifier vocabulary. The root router has no recursive
+control flow. A model can follow the policy with a shallow loop: load the routed
+files, scan every rule, apply every match, resolve conflicts, then verify before
+reporting success. `bin/validate-axl` mechanically checks that profile.
 
 ## Contents
 
 - `AGENTS.md` — root router. Small default-load entrypoint that tells agents what to read and when.
 - `rules/base.axlr` — compact operational core. Default rules for planning, context control, evidence, patch discipline, verification, and closeout.
+- `rules/gitnexus.axlr` — conditional code-intelligence policy, kept out of the default prompt.
 - `rules/*.axlr` — optional domain overlays (`git`, `aws`, `java-spring`, `node-react`, `postgres`, `security`, `verification`). Most are placeholders to be filled in.
-- `axl/spec.axlr` — full AXL-R language spec: notation, rule shape, priority model, domain objects.
+- `axl/spec.axlr` — AXL-R grammar, modal semantics, evaluation order, and authoring rules.
 - `axl/types.axlt` — shared symbols, value sigils, and status enums.
 - `axl/state-spec.axls` — durable state/ledger file specification (AXL-S).
-- `axl/patch-spec.axlp` — sparse patch/update file specification (AXL-P). Placeholder.
+- `axl/patch-spec.axlp` — sparse, recoverable state-update specification (AXL-P).
+- `agents/orchestrator.axlr` — deterministic backlog selection and subagent routing.
 - `ledgers/example-task.axls` — task-level state ledger example.
 - `ledgers/example-project.axls` — project-level state ledger example.
 - `skills/axl-humanize/SKILL.md` — on-demand, fact-preserving expansion and fidelity-assessment workflow.
 - `bin/install-opencode-rules` — idempotently wires the root anchor URL into `~/.config/opencode/opencode.json[c]`.
+- `bin/validate-axl` — checks AXL-R grammar, IDs, imports, and prompt budgets.
 
 ## Install
 
@@ -30,6 +41,12 @@ Goal: less token noise per turn, unambiguous conflict resolution, and rules that
 ```
 
 Requires `jq` and `curl`.
+
+Validate policy changes with:
+
+```bash
+./bin/validate-axl
+```
 
 ## Credit
 

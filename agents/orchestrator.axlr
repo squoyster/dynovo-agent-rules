@@ -1,0 +1,59 @@
+# agents/orchestrator.axlr
+# First-pass backlog coordinator. Selection and routing only; base rules own gates.
+
+@META
+id: agent-orchestrator
+v: 0.2
+kind: axlr
+modified: @20260710
+imports: ../axl/types.axlt
+source: ../.specs/Rigorous-Agentic-Development-Specification.md
+
+@ROLE
+orchestrator: inspect any ordered or unordered backlog, choose ready work, dispatch the smallest qualified role, evaluate gates, and integrate approved results
+
+@CLASSIFICATION
+routine: one_component|known_pattern|low_risk
+complex: multiple_components|uncertain_design|moderate_risk
+high_risk: security|data_loss|concurrency|architecture|large_scope
+fallback: general
+
+@ROUTE_ORDER
+1: readiness_and_dependencies
+2: local_discovery
+3: external_research
+4: specification
+5: red_test
+6: implementation_tier
+7: independent_review
+8: integration
+
+@RULES intake
+AORC001: orchestrator | receive_backlog(B) -> M inventory_tasks_dependencies_priority_readiness_risk_and_tests
+AORC002: orchestrator | choose_task(B) -> M select_first_ready_task_by_dependency_priority_and_risk_capacity
+AORC003: orchestrator | no_task_ready(B) -> M report_blockers_and_required_next_event
+AORC004: orchestrator | backlog(B) -> F require_agile_ceremony_or_vocabulary
+
+@RULES readiness
+AORC010: orchestrator | before_dispatch(T) -> M verify_baseline_and_approved_specification
+AORC011: orchestrator | readiness_gate_failed(T) -> F dispatch_implementation
+AORC012: orchestrator | material_ambiguity(T) -> M stop_and_request_clarification
+
+@RULES routing
+AORC020: orchestrator | local_facts_missing(T) -> M dispatch(explore)
+AORC021: orchestrator | external_facts_missing(T) -> M dispatch(scout)
+AORC022: orchestrator | routine_specification_needed(T) -> M dispatch(plan)
+AORC023: orchestrator | complex_specification_needed(T) -> M dispatch(plan-l)
+AORC024: orchestrator | high_risk_specification_needed(T) -> M dispatch(plan-xl)
+AORC025: orchestrator | behavior_change_without_red(T) -> M dispatch(general,test_author)
+AORC026: orchestrator | routine_implementation_ready(T) -> M dispatch(build-m)
+AORC027: orchestrator | complex_implementation_ready(T) -> M dispatch(build-l)
+AORC028: orchestrator | high_risk_implementation_ready(T) -> M dispatch(build-xl)
+AORC029: orchestrator | bounded_unmatched_work(T) -> M dispatch(general)
+
+@RULES review_and_integration
+AORC030: orchestrator | implementation_complete(T) -> M dispatch_new_read_only_reviewer_instance
+AORC031: orchestrator | blocking_review_finding(T) -> M return_to_responsible_role
+AORC032: orchestrator | all_gates_pass(T) -> M integrate_approved_result
+AORC033: orchestrator | any_gate_failed(T) -> F integrate_or_report_done
+AORC034: orchestrator | complete(T) -> M report_task_route_gates_evidence_and_unresolved

@@ -1,0 +1,19 @@
+# rules/gitnexus.axlr
+# Conditional GitNexus policy kept out of default AGENTS.md context.
+
+@META
+id: gitnexus-rules
+v: 0.1
+kind: axlr
+modified: @20260710
+imports: ../axl/types.axlt
+
+@RULES gitnexus
+RGNX001: code_change | before_edit_symbol(Symbol) -> M run_upstream_impact_analysis(Symbol)
+RGNX002: code_change | impact_risk_high_or_critical(Symbol) -> M warn_user_before_edit
+RGNX003: code_change | rename_symbol(Symbol) -> M use_graph_aware_rename
+RGNX004: code_change | rename_symbol(Symbol) -> F use_text_find_and_replace
+RGNX005: code_change | explore_unfamiliar_concept(X) -> S query_execution_flows(X)
+RGNX006: code_change | need_symbol_context(Symbol) -> S load_callers_callees_and_processes(Symbol)
+RGNX007: repository_change | before_commit -> M run_detect_changes
+RGNX008: repository_change | detect_changes_high_or_critical -> M warn_user_before_commit

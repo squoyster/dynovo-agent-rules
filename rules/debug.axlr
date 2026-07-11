@@ -1,19 +1,19 @@
 # rules/debug.axlr
-# Per-turn AXL rule-evaluation trace enabled by AXL_DEBUG.
+# Optional one-line rule trace enabled by AXL_DEBUG.
 
 @META
 id: axl-debug-rules
-v: 0.1
+v: 0.2
 kind: axlr
-modified: @20260709
+modified: @20260710
 imports: ../axl/types.axlt
 
 @RULES debug
-RDBG001: axl_debug -> M track(rule_evaluation:{matched,applied,suppressed,blocked,conflicted})
-RDBG002: axl_debug ∧ closeout(turn) -> M emit_once(axl_debug_line) [position: final_line]
-RDBG003: axl_debug_line -> M format("AXL_DEBUG m={matched_ids};a={applied_ids};s={suppressed_ids};b={blocked_ids};c={conflicts}")
-RDBG004: axl_debug_line -> M single_physical_line ∧ F emit(rule_prose ∨ hidden_reasoning ∨ internal_chain_of_thought)
-RDBG005: axl_debug ∧ no_rule_matches -> M emit("AXL_DEBUG m=-;a=-;s=-;b=-;c=-")
-RDBG006: axl_debug_line ∧ sensitive(rule_metadata) -> M redact(sensitive_fields) ∧ preserve(rule_ids ∧ evaluation_state)
-RDBG007: axl_debug_line -> M emit_after(normal_turn_output)
-RDBG008: axl_debug ∧ closeout(turn) -> F emit_more_than_once(axl_debug_line)
+RDBG001: debug | start_turn -> M track_matched_applied_suppressed_blocked_and_conflicted_ids
+RDBG002: debug | closeout_turn -> M emit_one_axl_debug_line
+RDBG003: debug | emit_debug_line -> M format_axl_debug_id_sets
+RDBG004: debug | emit_debug_line -> M place_after_normal_output
+RDBG005: debug | emit_debug_line -> F expose_hidden_reasoning
+RDBG006: debug | sensitive_rule_metadata -> M redact_sensitive_fields
+RDBG007: debug | no_rule_matches -> M emit_empty_axl_debug_sets
+RDBG008: debug | closeout_turn -> F emit_debug_line_more_than_once

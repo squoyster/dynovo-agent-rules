@@ -3,10 +3,18 @@
 
 @META
 id: axl-s-spec
-v: 0.5
+v: 0.6
 kind: axls
-modified: @20260709
+modified: @20260710
 purpose: durable state, plans, handoffs, context pins, evidence, logs
+
+@RECORD_SYNTAX
+field: key: value
+record: ID key=value key=value
+spaces: quote values containing spaces
+physical_lines: one record per line
+stable_ids: required for referenced records
+unknown_fields: preserve
 
 @COMMON_MISTAKES
 m1: Never delete @PLAN tasks; set status SKIP with note.

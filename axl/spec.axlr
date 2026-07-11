@@ -1,62 +1,85 @@
 # axl/spec.axlr
-# AXL-R — Agent eXecution Language Rules v0.4
+# AXL-R grammar and semantics optimized for shallow, deterministic evaluation.
 
 @META
 id: axl-r-spec
-v: 0.5
+v: 0.6
 kind: axlr
-modified: @20260709
-purpose: compact normative rules for coding/infra agents
-
-@COMMON_MISTAKES
-m1: Do not treat S as optional when unblocked; S means should unless stronger rule blocks.
-m2: Do not report done when any acceptance criterion is unsatisfied or unverified.
-m3: Do not use stale memory as governing policy; reread current policy chain.
-m4: Do not expand read set unboundedly; compute ReadSet(T).
-m5: Do not retry failed shell commands before classifying the error.
-m6: Do not silently resolve rule conflicts; apply priority, specificity, else stop_report(conflict).
-m7: Do not turn AXL-R rules into mutable task logs; use AXL-S for state.
-m8: Do not store secrets inline; use *ENV_VAR references.
-m9: Do not apply or publish a rule set with duplicate rule identifiers.
+modified: @20260710
+purpose: compact executable policy for coding and infrastructure agents
 
 @RULE_SHAPE
-canonical: R[id]: scope | trigger -> norm action [pre] [read] [verify] [except] [effect] [emit]
-schema: {id,scope,trigger,norm,action,pre?,read?,verify?,except?,effect?,emit?}
+canonical: ID: scope | trigger -> norm action [pre: x] [read: x] [verify: x] [except: x] [effect: x] [emit: x]
+id: [A-Z][A-Z0-9]{2,31}
+scope: one short predicate or all
+trigger: one event or condition; combine only when required
+norm: exactly one of M|F|S|P|Pref
+action: one action or a short ordered action list
+physical_lines: exactly one per rule
 
-@PRIORITY
-order: safety ≻ platform_policy ≻ user_instruction ≻ repo_policy ≻ local_policy ≻ task_AC ≻ preference
-conflict: conflict(a,b)->choose(max_priority); tie->choose(more_specific); unresolved->stop_report(conflict)
+@PREDICATES
+form: snake_case or snake_case(arguments)
+variables: UpperCamel or one uppercase letter
+values: snake_case|quoted_string|sigil_value
+and: x ∧ y
+or: x ∨ y
+not: ¬x
+ordering: x ≺ y
+free_prose_inside_expression: forbidden
 
-@DOMAIN_OBJECTS
-T: task
-AC: acceptance_criterion
-Repo: repository_root
-p: path
-Δ: changed_paths
-S: symbol
-Cmd: shell_command
-Tool: external_tool|MCP|API|connector
-Ctx: context_payload
-Ev: evidence
-Plan: ordered_task_plan
-Step: plan_step
-Patch: file_modification
-Gate: verification_gate
-Claim: assertion
-Risk: possible_failure_mode
-State: durable_state
-Mem: memory_item
-CtxRec: context_record
+@QUALIFIERS
+pre: condition required before action
+read: source that must be loaded before action
+verify: evidence required before success
+except: condition that suppresses the whole rule
+effect: expected state after action
+emit: required output record
+unknown_qualifier: invalid
+duplicate_qualifier: invalid
+
+@MODAL_SEMANTICS
+M: execute action; if impossible stop or mark blocked with reason
+F: prohibit action even when requested by a lower-priority source
+S: execute unless a higher-priority rule blocks; record suppression when material
+P: permit action without requiring it
+Pref: choose first option over second unless a higher-priority rule blocks
+
+@EVALUATION
+order: import -> scan -> match -> qualify -> resolve -> act -> verify -> closeout
+match: scope_is_true ∧ trigger_is_true
+conflict_1: explicit_priority_order
+conflict_2: narrower_scope
+conflict_3: more_specific_trigger
+conflict_unresolved: stop_and_report
+unknown_predicate: do_not_guess; mark_unresolved
+malformed_rule: do_not_execute; report_file_and_line
+
+@IMPORTS
+path_base: directory_of_importing_file
+load: imported_rules_before_local_rules
+rule_ids: unique_across_effective_import_set
+cycle: invalid
+missing_import: invalid
+
+@COMMON_FAILURES
+m1: treating S as optional when unblocked
+m2: applying only the first matching rule
+m3: mixing two modal norms in one rule
+m4: omitting scope or trigger
+m5: hiding prose connectors such as for or when_applicable inside an action
+m6: silently resolving ambiguity or conflict
+m7: reporting done before verify clauses pass
+m8: storing mutable state in AXL-R instead of AXL-S
+m9: storing secrets inline instead of environment references
 
 @RULES authoring
-RAXL001: author(rule_set) -> M verify(unique(rule_id,transitive_import_scope)) ≺ publish(rule_set)
-RAXL002: add(incoming_rules,existing_rules) -> M detect(identifier_conflicts(incoming_rules,existing_rules))
-RAXL003: identifier_conflict(incoming_rule,existing_rule) -> M preserve(id(existing_rule)) ∧ M renumber(incoming_rule)
-RAXL004: duplicate(rule_id) -> M stop_report(identifier_conflict) ∧ F apply_or_publish(ambiguous_rule_set)
-RAXL005: renumber(incoming_rule) -> M allocate(valid_free_id) ∧ M update(all_references(incoming_rule))
-RAXL006: allocate(valid_free_id) -> M choose(first_free_id_in_intended_section)
-RAXL007: child_rule(incoming_rule,parent) ∧ free_suffix(parent) -> Pref(allocate(next_free_suffix(parent)),allocate(new_numeric_parent))
-RAXL008: no_free_suffix(parent) -> M allocate(next_free_numeric_parent) ∧ F invent(noncanonical_suffix)
-RAXL009: renumber(existing_rule) -> F unless(explicit_migration ∧ complete_reference_update ∧ validation)
-RAXL010: renumber(rule) -> M verify(unique(rule_id,transitive_import_scope) ∧ references_resolve ∧ ordering_valid)
-RAXL011: unresolved(identifier_conflict) -> M stop_report(conflicting_ids ∧ affected_rules) ∧ F guess_or_overwrite
+RAXL001: all | before_publish(rule_set) -> M validate_syntax_and_semantics(rule_set)
+RAXL002: all | before_publish(rule_set) -> M verify_unique_ids_in_effective_import_set
+RAXL003: all | duplicate_rule_id(incoming,existing) -> M preserve_existing_id
+RAXL004: all | duplicate_rule_id(incoming,existing) -> M renumber_incoming_rule
+RAXL005: all | duplicate_rule_id(incoming,existing) -> F publish_ambiguous_rule_set
+RAXL006: all | renumber(rule) -> M update_all_rule_references
+RAXL007: all | malformed_rule(rule) -> M report_exact_file_and_line
+RAXL008: all | malformed_rule(rule) -> F execute_rule
+RAXL009: all | semantic_ambiguity(rule) -> M stop_and_request_resolution
+RAXL010: all | semantic_ambiguity(rule) -> F guess_silently

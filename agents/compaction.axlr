@@ -1,22 +1,18 @@
 # agents/compaction.axlr
-# Override prompt for the opencode hidden `compaction` agent. Format-preserving.
-# Self-contained notation (types.axlt may not be loaded for trivial/system tasks).
+# Hidden continuation-summary role.
 
 @META
 id: agent-compaction
-v: 0.1
+v: 0.2
 kind: axlr
+modified: @20260710
 imports: ../axl/types.axlt
 
-@NOTATION
-M: must
-F: must_not
-∧: and
-→: implies
-
 @ROLE
-compaction: emit a continuation summary that replaces history so a future instance can resume
+compaction: emit enough verified state for a fresh agent to resume
 
-@RULES
-R0: all | trigger -> M emit(structured ∧ concise ∧ actionable summary)
-R1: all | output -> M include(goal ∧ work_done ∧ current_state ∧ next_step ∧ decisions ∧ open_questions ∧ changed_paths) ∧ F invent_facts
+@RULES compaction
+ACMP001: compaction | trigger -> M emit_structured_concise_actionable_summary
+ACMP002: compaction | output -> M include_goal_work_done_current_state_next_step_decisions_questions_and_paths
+ACMP003: compaction | output -> M distinguish_fact_assumption_and_unresolved
+ACMP004: compaction | output -> F invent_facts

@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""Validate AXL-R grammar, references, uniqueness, and load budgets."""
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+RULE_FILE_GLOBS = ("rules/*.axlr", "agents/*.axlr", "axl/*.axlr")
+RULE_RE = re.compile(
+    r"^(?P<id>[A-Z][A-Z0-9]{2,31}): "
+    r"(?P<scope>[^|]+) \| (?P<trigger>.+) -> "
+    r"(?P<norm>Pref|M|F|S|P) (?P<body>.+)$"
+)
+QUALIFIER_RE = re.compile(
+    r" \[(?P<name>pre|read|verify|except|effect|emit): (?P<value>[^\[\]]+)\]$"
+)
+BUDGET_RE = re.compile(r"^(?P<name>[a-z_]+): <= (?P<limit>[0-9]+) lines(?: .*)?$")
+IMPORT_RE = re.compile(r"^imports: (?P<paths>.+)$")
+MIXED_NORM_RE = re.compile(r"(?:^| ∧ | ∨ )(?:M|F|S|P|Pref) ")
+LOAD_RE = re.compile(r"load\((?P<path>[^)]+)\)")
+
+
+class Report:
+    def __init__(self) -> None:
+        self.errors: list[str] = []
+        self.rules = 0
+        self.rule_files = 0
+        self.budgets = 0
+        self.empty_placeholders = 0
+
+    def error(self, path: Path, line: int | None, message: str) -> None:
+        relative = path.relative_to(ROOT)
+        where = f"{relative}:{line}" if line else str(relative)
+        self.errors.append(f"{where}: {message}")
+
+
+def lines(path: Path) -> list[str]:
+    return path.read_text(encoding="utf-8").splitlines()
+
+
+def rule_files() -> list[Path]:
+    found: set[Path] = set()
+    for pattern in RULE_FILE_GLOBS:
+        found.update(ROOT.glob(pattern))
+    return sorted(found)
+
+
+def peel_qualifiers(body: str, report: Report, path: Path, line_no: int) -> str:
+    remainder = body
+    seen: set[str] = set()
+    while remainder.endswith("]"):
+        match = QUALIFIER_RE.search(remainder)
+        if not match:
+            report.error(path, line_no, "malformed or unsupported qualifier")
+            return remainder
+        name = match.group("name")
+        if name in seen:
+            report.error(path, line_no, f"duplicate [{name}: ...] qualifier")
+        seen.add(name)
+        remainder = remainder[: match.start()]
+    return remainder
+
+
+def validate_rule_files(report: Report) -> None:
+    ids: dict[str, tuple[Path, int]] = {}
+    for path in rule_files():
+        content = lines(path)
+        if not content:
+            report.empty_placeholders += 1
+            continue
+
+        report.rule_files += 1
+        meta: dict[str, str] = {}
+        imports: list[tuple[int, str]] = []
+        in_meta = False
+        in_rules = False
+        file_rules = 0
+
+        for line_no, line in enumerate(content, start=1):
+            if len(line) > 512:
+                report.error(path, line_no, f"line has {len(line)} chars; max is 512")
+
+            if line.startswith("@"):
+                in_meta = line == "@META"
+                in_rules = line.startswith("@RULES")
+                continue
+
+            if in_meta and line and not line.startswith("#"):
+                if ": " in line:
+                    key, value = line.split(": ", 1)
+                    meta[key] = value
+                    import_match = IMPORT_RE.match(line)
+                    if import_match:
+                        for item in import_match.group("paths").split("|"):
+                            imports.append((line_no, item.strip()))
+                continue
+
+            if not in_rules or not line or line.startswith("#"):
+                continue
+
+            match = RULE_RE.match(line)
+            if not match:
+                report.error(
+                    path,
+                    line_no,
+                    "expected ID: scope | trigger -> norm action [qualifier: value]",
+                )
+                continue
+
+            rule_id = match.group("id")
+            previous = ids.get(rule_id)
+            if previous:
+                previous_path, previous_line = previous
+                report.error(
+                    path,
+                    line_no,
+                    f"duplicate rule ID {rule_id}; first at "
+                    f"{previous_path.relative_to(ROOT)}:{previous_line}",
+                )
+            else:
+                ids[rule_id] = (path, line_no)
+
+            action = peel_qualifiers(match.group("body"), report, path, line_no)
+            if MIXED_NORM_RE.search(action):
+                report.error(path, line_no, "one rule may contain only one modal norm")
+            if not match.group("scope").strip() or not match.group("trigger").strip():
+                report.error(path, line_no, "scope and trigger must be non-empty")
+            file_rules += 1
+            report.rules += 1
+
+        if meta.get("kind") != "axlr":
+            report.error(path, None, "non-empty AXL-R file requires @META kind: axlr")
+        for required in ("id", "v", "kind"):
+            if required not in meta:
+                report.error(path, None, f"missing @META field {required}")
+        if file_rules == 0:
+            report.error(path, None, "non-empty AXL-R file contains no canonical rules")
+        for line_no, import_path in imports:
+            target = (path.parent / import_path).resolve()
+            if not target.is_file():
+                report.error(path, line_no, f"missing import {import_path}")
+
+
+def validate_router(report: Report) -> None:
+    path = ROOT / "AGENTS.md"
+    content = lines(path)
+    in_disclosure = False
+    ids: set[str] = set()
+    order: list[str] = []
+    for line_no, line in enumerate(content, start=1):
+        if line.startswith("## "):
+            in_disclosure = False
+            continue
+        if line.startswith("@"):
+            in_disclosure = line == "@DISCLOSURE"
+            continue
+        if not in_disclosure or not line or line.startswith("#"):
+            continue
+        match = RULE_RE.match(line)
+        if not match:
+            report.error(path, line_no, "noncanonical disclosure rule")
+            continue
+        rule_id = match.group("id")
+        if rule_id in ids:
+            report.error(path, line_no, f"duplicate disclosure ID {rule_id}")
+        ids.add(rule_id)
+        order.append(rule_id)
+        if "process(" in line:
+            report.error(path, line_no, "recursive disclosure processing is forbidden")
+        if match.group("norm") != "M":
+            continue
+        for load_match in LOAD_RE.finditer(match.group("body")):
+            target_text = load_match.group("path")
+            if "{" in target_text:
+                continue
+            target = ROOT / target_text
+            if not target.is_file():
+                report.error(path, line_no, f"missing routed file {target_text}")
+    if order[:2] != ["D001", "D002"]:
+        report.error(path, None, "D001 types and D002 base must be the first disclosures")
+
+
+def budget_targets(name: str) -> list[Path]:
+    mapping = {
+        "router": [ROOT / "AGENTS.md"],
+        "base_rules": [ROOT / "rules/base.axlr"],
+        "types": [ROOT / "axl/types.axlt"],
+        "domain_overlay": sorted(
+            path for path in ROOT.glob("rules/*.axlr") if path.name != "base.axlr"
+        ),
+        "agent_prompt": sorted(ROOT.glob("agents/*.axlr")),
+        "ledger_summary": sorted(ROOT.glob("ledgers/*.axls")),
+    }
+    return mapping.get(name, [])
+
+
+def validate_budgets(report: Report) -> None:
+    agents = ROOT / "AGENTS.md"
+    declared: dict[str, int] = {}
+    in_budget = False
+    for line_no, line in enumerate(lines(agents), start=1):
+        if line == "@LOAD_BUDGET":
+            in_budget = True
+            continue
+        if in_budget and line.startswith("@"):
+            break
+        if not in_budget:
+            continue
+        match = BUDGET_RE.match(line)
+        if match:
+            declared[match.group("name")] = int(match.group("limit"))
+
+    required = {
+        "router",
+        "base_rules",
+        "types",
+        "domain_overlay",
+        "agent_prompt",
+        "ledger_summary",
+    }
+    for missing in sorted(required - declared.keys()):
+        report.error(agents, None, f"missing load budget {missing}")
+
+    for name, limit in sorted(declared.items()):
+        targets = budget_targets(name)
+        if not targets:
+            report.error(agents, None, f"unknown or empty budget target {name}")
+            continue
+        report.budgets += 1
+        for target in targets:
+            actual = len(lines(target))
+            if actual > limit:
+                report.error(target, None, f"{name} budget exceeded: {actual} > {limit}")
+
+
+def main() -> int:
+    report = Report()
+    validate_rule_files(report)
+    validate_router(report)
+    validate_budgets(report)
+    if report.errors:
+        print("AXL validation failed:")
+        for error in report.errors:
+            print(f"- {error}")
+        return 1
+    print(
+        "AXL validation passed: "
+        f"{report.rule_files} rule files, {report.rules} rules, "
+        f"{report.budgets} budgets; "
+        f"{report.empty_placeholders} empty placeholders skipped"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
