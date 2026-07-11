@@ -18,6 +18,21 @@ complex: multiple_components|uncertain_design|moderate_risk
 high_risk: security|data_loss|concurrency|architecture|large_scope
 fallback: general
 
+@CRITICAL_BRANCH
+condition: behavior_change_without_red
+route: general_as_test_author
+blocking_gate: red
+implementation_before_red: forbidden
+
+@OUTPUT_CONTRACT
+route_line: ROUTE={agent} role={role}
+gate_line: GATE={gate_name}
+gate_name: use red|green|review|validation|integration; never use trigger_name
+
+@CRITICAL_OUTPUT behavior_change_without_red
+line1: ROUTE=general role=test_author
+line2: GATE=red
+
 @ROUTE_ORDER
 1: readiness_and_dependencies
 2: local_discovery
@@ -45,11 +60,14 @@ AORC021: orchestrator | external_facts_missing(T) -> M dispatch(scout)
 AORC022: orchestrator | routine_specification_needed(T) -> M dispatch(plan)
 AORC023: orchestrator | complex_specification_needed(T) -> M dispatch(plan-l)
 AORC024: orchestrator | high_risk_specification_needed(T) -> M dispatch(plan-xl)
-AORC025: orchestrator | behavior_change_without_red(T) -> M dispatch(general,test_author)
-AORC026: orchestrator | routine_implementation_ready(T) -> M dispatch(build-m)
-AORC027: orchestrator | complex_implementation_ready(T) -> M dispatch(build-l)
-AORC028: orchestrator | high_risk_implementation_ready(T) -> M dispatch(build-xl)
-AORC029: orchestrator | bounded_unmatched_work(T) -> M dispatch(general)
+AORC025: orchestrator | behavior_change_without_red(T) -> M dispatch_general_as_test_author
+AORC026: orchestrator | behavior_change_without_red(T) -> F dispatch_implementation_agent
+AORC036: orchestrator | report_behavior_change_without_red(T) -> M emit_route_general_role_test_author
+AORC037: orchestrator | report_behavior_change_without_red(T) -> M emit_blocking_gate_red
+AORC027: orchestrator | routine_implementation_with_red_evidence(T) -> M dispatch(build-m)
+AORC028: orchestrator | complex_implementation_with_red_evidence(T) -> M dispatch(build-l)
+AORC029: orchestrator | high_risk_implementation_with_red_evidence(T) -> M dispatch(build-xl)
+AORC035: orchestrator | bounded_unmatched_work(T) -> M dispatch(general)
 
 @RULES review_and_integration
 AORC030: orchestrator | implementation_complete(T) -> M dispatch_new_read_only_reviewer_instance
