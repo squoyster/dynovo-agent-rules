@@ -47,7 +47,9 @@ secret-like environment assignments as `<REDACTED:DYNOVO_SECRET>`.
 
 Runtime state is local under `.dynovo/` and ignored by default. The hook makes no
 network calls or LLM calls. Experimental OpenCode hook names are isolated in one
-adapter and may require maintenance as OpenCode evolves.
+adapter and may require maintenance as OpenCode evolves. The tested OpenCode
+plugin input does not expose the resolved plugin list, so DCP presence is a
+best-effort diagnostic only; coexistence never depends on detecting it.
 
 ## Configuration and workers
 
