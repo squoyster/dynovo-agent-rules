@@ -66,3 +66,29 @@ test("successful compaction requests recovery exactly once", async () => {
     /Canonical files, Git state, and executable evidence override the summary\./,
   );
 });
+
+test("recovery is injected once into the resumed normal message", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-recovery-delivery-"));
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  await adapter.hooks["experimental.session.compacting"]?.({ sessionID: "ses_delivery" }, { context: [] });
+  await adapter.hooks.event?.({ event: { type: "session.compacted", properties: { sessionID: "ses_delivery" } } });
+  const first = { parts: [] as unknown[] };
+  const second = { parts: [] as unknown[] };
+  await adapter.hooks["chat.message"]?.({ sessionID: "ses_delivery" }, first);
+  await adapter.hooks["chat.message"]?.({ sessionID: "ses_delivery" }, second);
+  assert.equal(first.parts.length, 1);
+  assert.equal(second.parts.length, 0);
+});
+
+test("separate sessions retain separate checkpoint state", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-concurrent-"));
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  const left = { context: [] as string[] };
+  const right = { context: [] as string[] };
+  await Promise.all([
+    adapter.hooks["experimental.session.compacting"]?.({ sessionID: "ses_left" }, left),
+    adapter.hooks["experimental.session.compacting"]?.({ sessionID: "ses_right" }, right),
+  ]);
+  assert.match(left.context[0] ?? "", /session_id=ses_left/);
+  assert.match(right.context[0] ?? "", /session_id=ses_right/);
+});

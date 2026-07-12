@@ -16,18 +16,33 @@ for f in opencode.jsonc opencode.json; do [[ -s "$CONFIG_DIR/$f" ]] && CONFIG="$
 [[ -n "$CONFIG" ]] || CONFIG="$CONFIG_DIR/opencode.json"
 command -v jq >/dev/null 2>&1 || { echo "error: jq is required" >&2; exit 1; }
 [[ -s "$ANCHOR" ]] || { echo "Missing or empty anchor: ${ANCHOR}" >&2; exit 1; }
-URL="https://raw.githubusercontent.com/squoyster/dynovo-agent-rules/main/AGENTS.md"; PLUGIN='@dynovo/opencode-context'
+URL="https://raw.githubusercontent.com/squoyster/dynovo-agent-rules/main/AGENTS.md"
+PLUGIN_DIR="${SCRIPT_DIR}/../packages/opencode-dynovo-context"
+PLUGIN="${PLUGIN_DIR}/dist/index.js"
 if [[ "$DRY_RUN" -eq 1 ]]; then echo "DRY RUN: would update $CONFIG"; [[ "$RULES_ONLY" -eq 1 ]] && echo "  instruction: $URL"; [[ "$WITH_CONTEXT" -eq 1 ]] && echo "  plugin: $PLUGIN"; exit 0; fi
 if [[ ! -e "$CONFIG" ]]; then mkdir -p "$CONFIG_DIR"; printf '{\n}\n' > "$CONFIG"; fi
+append_existing_array() {
+  local key="$1" value="$2" tmp
+  tmp=$(mktemp)
+  awk -v key="$key" -v value="$value" '
+    $0 ~ "^[[:space:]]*\\\"" key "\\\"[[:space:]]*:" { in_array=1 }
+    in_array && /^[[:space:]]*][[:space:]]*,?[[:space:]]*$/ && !done { print "    \"" value "\","; done=1; in_array=0 }
+    { print }
+  ' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
+}
 if [[ "$RULES_ONLY" -eq 1 ]] && ! grep -Fq -- "$URL" "$CONFIG"; then
-  grep -Eq '^[[:space:]]*"instructions"[[:space:]]*:' "$CONFIG" && { echo "Config already has instructions; merge $URL manually" >&2; exit 1; }
+  if grep -Eq '^[[:space:]]*"instructions"[[:space:]]*:' "$CONFIG"; then append_existing_array instructions "$URL"; echo "Added instruction to existing array"; else
   tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
   awk -v line="  \"instructions\": [\"$URL\"]" '{ lines[NR]=$0; if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) last=NR } END { prev=0; for(i=last-1;i>=1;i--){s=lines[i];sub(/^[[:space:]]+/,"",s);if(s!=""&&s!~/^\/\//){prev=i;break}}; for(i=1;i<=NR;i++){if(i==last)print line;if(i==prev){t=lines[i];sub(/[[:space:]]+$/,"",t);if(t!~/,$/)t=t ",";print t;next}print lines[i]}}' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
   echo "Added instructions to $CONFIG"
+  fi
 fi
-if [[ "$WITH_CONTEXT" -eq 1 ]] && ! grep -Fq -- "$PLUGIN" "$CONFIG"; then
-  if grep -Eq '^[[:space:]]*"plugin"[[:space:]]*:' "$CONFIG"; then echo "Config already has plugin; add $PLUGIN manually to preserve JSONC" >&2; exit 1; fi
+if [[ "$WITH_CONTEXT" -eq 1 ]]; then
+  [[ -f "$PLUGIN_DIR/package.json" ]] || { echo "Missing local plugin package: $PLUGIN_DIR" >&2; exit 1; }
+  (cd "$PLUGIN_DIR" && npm run build >/dev/null)
+  [[ -f "$PLUGIN" ]] || { echo "Local plugin build did not produce $PLUGIN" >&2; exit 1; }
+  if grep -Eq '^[[:space:]]*"plugin"[[:space:]]*:' "$CONFIG"; then append_existing_array plugin "$PLUGIN"; echo "Added plugin to existing array"; exit 0; fi
   tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
   awk -v line="  \"plugin\": [\"$PLUGIN\"]" '{ lines[NR]=$0; if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) last=NR } END { prev=0; for(i=last-1;i>=1;i--){s=lines[i];sub(/^[[:space:]]+/,"",s);if(s!=""&&s!~/^\/\//){prev=i;break}}; for(i=1;i<=NR;i++){if(i==last)print line;if(i==prev){t=lines[i];sub(/[[:space:]]+$/,"",t);if(t!~/,$/)t=t ",";print t;next}print lines[i]}}' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
-  echo "Added plugin $PLUGIN to $CONFIG"
+  echo "Built and added local plugin $PLUGIN to $CONFIG"
 fi
