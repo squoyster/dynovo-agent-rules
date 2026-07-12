@@ -38,6 +38,11 @@ if [[ "$RULES_ONLY" -eq 1 ]] && ! grep -Fq -- "$URL" "$CONFIG"; then
   echo "Added instructions to $CONFIG"
   fi
 fi
+if [[ "$WITH_CONTEXT" -eq 1 ]] && [[ "$FORCE" -eq 1 ]] && grep -Fq -- "$PLUGIN" "$CONFIG"; then
+  [[ -f "$PLUGIN_DIR/package.json" ]] || { echo "Missing local plugin package: $PLUGIN_DIR" >&2; exit 1; }
+  (cd "$PLUGIN_DIR" && npm run build >/dev/null)
+  echo "Force-refreshed local plugin build at $PLUGIN"
+fi
 if [[ "$WITH_CONTEXT" -eq 1 ]] && ! grep -Fq -- "$PLUGIN" "$CONFIG"; then
   [[ -f "$PLUGIN_DIR/package.json" ]] || { echo "Missing local plugin package: $PLUGIN_DIR" >&2; exit 1; }
   (cd "$PLUGIN_DIR" && npm run build >/dev/null)

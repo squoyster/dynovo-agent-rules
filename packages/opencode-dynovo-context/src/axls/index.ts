@@ -20,23 +20,12 @@ export class AxlsDocument {
   }
 
   deleteRecord(blockName: string, id: string): void {
-    if (blockName === "PLAN" || blockName === "LOG") {
-      throw new Error(`${blockName} is append-only; record ${id} cannot be deleted`);
-    }
-    const block = this.blocks.get(blockName);
-    if (!block) return;
-    block.records = block.records.filter((record) => record.id !== id);
+    throw new Error(`${blockName} is append-only and source-preserving; record ${id} cannot be deleted`);
   }
 
   replaceRecord(blockName: string, id: string, fields: Record<string, string>): void {
-    if (blockName === "CTX") {
-      throw new Error(`CTX is immutable; record ${id} cannot be changed`);
-    }
-    const record = this.blocks.get(blockName)?.records.find((item) => item.id === id);
-    if (!record) throw new Error(`Unknown ${blockName} record: ${id}`);
-    record.fields = { ...fields };
-    record.raw = [id, ...Object.entries(fields).map(([key, value]) => `${key}=${/\s/.test(value) ? JSON.stringify(value) : value}`)].join(" ");
-    this.mutated = true;
+    void fields;
+    throw new Error(`${blockName} is immutable and source-preserving; record ${id} cannot be replaced`);
   }
 
   serialize(): string {
