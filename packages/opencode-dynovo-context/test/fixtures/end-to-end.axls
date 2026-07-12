@@ -1,0 +1,37 @@
+@META
+id: e2e-task
+v: 1
+kind: axls
+
+@STATE
+objective: "Repair provider fallback"
+status: DOING
+risk: HIGH
+current_focus: t004
+current_gate: green
+next_action: "Delegate t004 to implementer"
+
+@PIN
+c001 value="Do not edit the approved red test"
+
+@PLAN
+t001 status=DONE owner=planner action="Map acceptance criteria" evidence=e001
+t002 status=DONE owner=test_author action="Create failing fallback test" evidence=e002
+t003 status=DONE owner=reviewer action="Confirm red test independence" evidence=e003
+t004 status=DOING owner=implementer action="Implement smallest fallback fix" evidence=NONE
+
+@DELEGATIONS
+a001 task=t001 role=planner status=DONE objective="Map acceptance criteria" scope="spec" constraints="no implementation" owner=planner-1 created_at=@20260712T0800 updated_at=@20260712T0810 result_ref=e001 unresolved=NONE
+a002 task=t002 role=test_author status=DONE objective="Create red test" scope="test/provider/**" constraints="tests only" owner=test-1 created_at=@20260712T0810 updated_at=@20260712T0820 result_ref=e002 unresolved=NONE
+a003 task=t004 role=implementer status=DOING objective="Implement fallback" scope="src/provider/**" constraints="do not edit red test" owner=build-1 created_at=@20260712T0830 updated_at=@20260712T0830 result_ref=NONE unresolved=NONE
+
+@FAILURES
+f001 command="npm test -- test/provider/fallback.test.ts" exit_code=1 error="Expected backup, received primary" hypothesis_status=active evidence=e002
+
+@REJECTED_APPROACHES
+r001 value="Disable fallback assertion" reason="would weaken approved test"
+
+@EVIDENCE
+e001 type=review status=PASS summary="acceptance map complete"
+e002 type=test status=FAIL summary="DCP placeholder references pruned raw output"
+e003 type=review status=PASS summary="reviewer independent"
