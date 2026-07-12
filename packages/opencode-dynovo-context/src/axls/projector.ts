@@ -31,6 +31,8 @@ export interface LedgerProjection {
   decisions: CapsuleItem[];
   rejectedApproaches: CapsuleItem[];
   openQuestions: CapsuleItem[];
+  delegations: Array<CapsuleItem & { status: string; owner: string; action: string; evidence: string }>;
+  warnings: CapsuleItem[];
 }
 
 export function projectLedger(source: string): LedgerProjection {
@@ -41,10 +43,11 @@ export function projectLedger(source: string): LedgerProjection {
   const plan = records(document, "PLAN").map((record) => ({ id: record.id, status: record.fields.status ?? "UNKNOWN", owner: record.fields.owner ?? "UNKNOWN", action: record.fields.action ?? record.raw, evidence: record.fields.evidence ?? "NONE" }));
   const criteria = records(document, "ACCEPTANCE_CRITERIA").map((record) => ({ ...item(record), status: record.fields.status ?? "TODO", evidence: record.fields.evidence ?? "NONE" }));
   const failures = records(document, "FAILURES").map((record) => ({ id: record.id, command: record.fields.command ?? "UNKNOWN", exitCode: record.fields.exit_code ?? "UNKNOWN", error: record.fields.error ?? "UNKNOWN", hypothesisStatus: record.fields.hypothesis_status ?? "unverified", evidence: record.fields.evidence ?? "NONE" }));
+  const delegations = records(document, "DELEGATIONS").map((record) => ({ id: record.id, status: record.fields.status ?? "UNKNOWN", owner: record.fields.owner ?? record.fields.role ?? "UNKNOWN", action: record.fields.objective ?? record.raw, evidence: record.fields.result_ref ?? "NONE" }));
   return {
     document, ledgerVersion: version, objective: state(document, "objective"), status: state(document, "status", "TODO"), risk: state(document, "risk", "LOW"), currentFocus: state(document, "current_focus"), currentPlanID: state(document, "current_plan_id", plan.find((entry) => entry.status !== "DONE")?.id ?? "NONE"), currentGate: state(document, "current_gate", "NONE"), nextAction: state(document, "next_action", "Reload canonical state before acting"),
     constraints: records(document, "PIN").map(item), acceptanceCriteria: criteria, plan, failures,
-    verification: records(document, "EVIDENCE").map(item), decisions: records(document, "DECISIONS").map(item), rejectedApproaches: records(document, "REJECTED_APPROACHES").map(item), openQuestions: records(document, "OPEN_QUESTIONS").map(item),
+    verification: records(document, "EVIDENCE").map(item), decisions: records(document, "DECISIONS").map(item), rejectedApproaches: records(document, "REJECTED_APPROACHES").map(item), openQuestions: records(document, "OPEN_QUESTIONS").map(item), delegations, warnings: [],
   };
 }
 

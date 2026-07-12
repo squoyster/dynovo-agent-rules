@@ -72,8 +72,8 @@ export function parseAxls(source: string): AxlsDocument {
   for (const line of source.split(/\n/)) {
     const header = /^@([A-Z][A-Z0-9_]*)\s*$/.exec(line);
     if (header) {
-      current = { name: header[1]!, records: [] };
-      document.blocks.set(current.name, current);
+      current = document.blocks.get(header[1]!) ?? { name: header[1]!, records: [] };
+      document.blocks.set(header[1]!, current);
       continue;
     }
     if (!current || !line || line.startsWith("#") || /^\s/.test(line)) continue;

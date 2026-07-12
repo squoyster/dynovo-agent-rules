@@ -10,7 +10,7 @@ function safePath(root: string, path: string): string {
   return candidate;
 }
 
-export async function resolveActiveObligations(root: string, paths: string[]): Promise<ActiveObligation[]> {
+export async function resolveActiveObligations(root: string, paths: string[], role = "all"): Promise<ActiveObligation[]> {
   const results: ActiveObligation[] = [];
   for (const path of [...new Set(paths)].sort()) {
     const absolute = safePath(root, path);
@@ -21,8 +21,8 @@ export async function resolveActiveObligations(root: string, paths: string[]): P
       continue;
     }
     const obligations = (await readFile(absolute, "utf8")).split("\n").flatMap((line) => {
-      const match = /^([A-Z][A-Z0-9]+):.*?->\s+[MFS]\s+(.+?)(?:\s+\[|$)/.exec(line);
-      return match ? [{ id: match[1]!, text: match[2]!.trim() }] : [];
+      const match = /^([A-Z][A-Z0-9]+):\s+([^|]+)\|.*?->\s+[MFS]\s+(.+?)(?:\s+\[|$)/.exec(line);
+      return match && (match[2]!.trim() === "all" || match[2]!.trim() === role) ? [{ id: match[1]!, text: match[3]!.trim() }] : [];
     });
     cache.set(absolute, { mtimeMs: info.mtimeMs, obligations });
     results.push(...obligations);

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { minimalLedgerProjection, projectLedger, type LedgerProjection } from "../axls/projector.js";
 import { renderProtectedContextCapsule } from "../compaction/capsule.js";
+import { redactSecrets } from "../compaction/capsule.js";
 import { renderDynovoCompactionPrompt } from "../compaction/prompt.js";
 import type { ProtectedCheckpoint } from "../compaction/types.js";
 import { resolveConfig, type DynovoContextConfig } from "../config.js";
@@ -87,7 +88,9 @@ export class OpenCodeAdapter {
       }
       if (this.config.failurePolicy.invalidLedger === "inject-raw-and-warn") {
         this.options.onDiagnostic?.(`Dynovo context plugin: ledger unavailable (${error instanceof Error ? error.message : "UNKNOWN"}); using minimal projection.`);
-        return { path, projection: minimalLedgerProjection() };
+        const projection = minimalLedgerProjection();
+        projection.warnings.push({ id: "ledger_invalid", text: `INVALID_LEDGER: ${path}` });
+        return { path, projection };
       }
       throw error;
     }
@@ -104,7 +107,7 @@ export class OpenCodeAdapter {
       const role = resolveRole(existing?.activeAgentRole ?? "coordinator");
       const activeOverlays = existing?.activeOverlays ?? [this.config.baseRules, "rules/context.axlr"];
       let obligations: ProtectedCheckpoint["obligations"] = [];
-      try { obligations = await resolveActiveObligations(this.config.rulesetRoot!, activeOverlays); }
+      try { obligations = await resolveActiveObligations(this.config.rulesetRoot!, activeOverlays, role.role); }
       catch (error) { this.options.onDiagnostic?.(`Dynovo context plugin: ruleset unavailable (${error instanceof Error ? error.message : "UNKNOWN"}).`); }
       const createdAt = new Date().toISOString();
       const id = this.checkpointID(sessionID);
@@ -112,16 +115,16 @@ export class OpenCodeAdapter {
         sessionID, checkpointID: id, createdAt, workspaceRoot: this.options.worktree, rulesetRoot: this.config.rulesetRoot!, rulesetCommit: existing?.rulesetCommit ?? "UNKNOWN", baseRules: this.config.baseRules, activeOverlays,
         ledgerPath, ledgerVersion: projection.ledgerVersion, activeRole: role.role, activeAgentID: existing?.activeAgentID ?? "UNKNOWN", delegationParent: existing?.delegationParent ?? "NONE", delegatedTask: existing?.delegatedTaskID ?? "NONE", allowedActions: role.allowed, forbiddenActions: role.forbidden,
         objective: projection.objective, status: projection.status, risk: projection.risk, currentFocus: projection.currentFocus, currentPlanID: projection.currentPlanID, currentGate: projection.currentGate, nextAction: projection.nextAction,
-        constraints: projection.constraints, acceptanceCriteria: projection.acceptanceCriteria, obligations, plan: projection.plan, files: [], decisions: projection.decisions, rejectedApproaches: projection.rejectedApproaches, failures: projection.failures, verification: projection.verification, openQuestions: projection.openQuestions, redactions: 0,
+        constraints: projection.constraints, acceptanceCriteria: projection.acceptanceCriteria, obligations, plan: [...projection.plan, ...projection.delegations], files: [], decisions: projection.decisions, rejectedApproaches: projection.rejectedApproaches, failures: projection.failures, verification: projection.verification, openQuestions: [...projection.openQuestions, ...projection.warnings], redactions: 0,
       };
       const capsule = renderProtectedContextCapsule(capsuleModel, this.config.capsule);
       const digest = createHash("sha256").update(capsule).digest("hex");
       const checkpointPath = join(checkpointDir, `${id}.json`);
+      projection.document.appendRecord("LOG", `checkpoint_${id}`, { event: "compaction_checkpoint_prepared", checkpoint_id: id, status: "prepared" });
+      await atomicWrite(ledgerPath, projection.document.serialize());
       await atomicWrite(join(checkpointDir, `${id}.capsule`), capsule);
       await atomicWrite(checkpointPath, `${JSON.stringify({ checkpoint_id: id, session_id: sessionID, ledger_revision: projection.ledgerVersion, ruleset_commit: capsuleModel.rulesetCommit, active_agent_role: role.role, current_plan_id: projection.currentPlanID, capsule_digest: digest, created_at: createdAt, status: "prepared" }, null, 2)}\n`);
       await atomicWrite(join(checkpointDir, "latest"), `${id}\n`);
-      projection.document.appendRecord("LOG", `checkpoint_${id}`, { event: "compaction_checkpoint_prepared", checkpoint_id: id, status: "prepared" });
-      await atomicWrite(ledgerPath, projection.document.serialize());
       await this.registry.put({ sessionID, workspaceRoot: this.options.worktree, repositoryRoot: this.options.directory, activeAgentRole: role.role, activeAgentID: existing?.activeAgentID, delegationParent: existing?.delegationParent, delegatedTaskID: existing?.delegatedTaskID, ledgerPath, rulesetRoot: this.config.rulesetRoot!, rulesetCommit: existing?.rulesetCommit, activeOverlays, currentPlanID: projection.currentPlanID, currentGate: projection.currentGate, lastCheckpointID: id, lastCheckpointAt: createdAt, recoveryDelivered: false });
       const prepared = { id, capsule, createdAt, ledgerPath, checkpointPath };
       this.prepared.set(sessionID, prepared);
@@ -138,7 +141,7 @@ export class OpenCodeAdapter {
       if (this.config.injectCustomPrompt) output.prompt = renderDynovoCompactionPrompt();
       this.options.observe?.("context-injected");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "UNKNOWN";
+      const message = redactSecrets(error instanceof Error ? error.message : "UNKNOWN");
       this.options.onDiagnostic?.(`Dynovo context plugin: checkpoint failed: ${message}`);
       if (this.config.failurePolicy.writeFailure === "abort") throw error;
       output.context.push(`DYNOVO_PROTECTED_CONTEXT_V1\n[WARNING]\ncheckpoint_status=FAILED\nerror=${message}\ncanonical_authority=AXL-R,AXL-S,repository,git,tests`);
