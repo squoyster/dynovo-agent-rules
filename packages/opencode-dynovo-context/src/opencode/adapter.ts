@@ -209,6 +209,7 @@ export class OpenCodeAdapter {
   }
 
   private async event(input: { event: Event }): Promise<void> {
+    await this.observeRouterSession(input.event);
     if (input.event.type !== "session.compacted") return;
     const sessionID = input.event.properties?.sessionID;
     if (!sessionID) return;
@@ -315,6 +316,27 @@ export class OpenCodeAdapter {
     return accepted?.fields.to ?? ledger.document.blocks.get("STATE")?.records.find((record) => record.id === "workflow_state")?.fields.value ?? fallback;
   }
 
+  private async observeRouterSession(event: Event): Promise<void> {
+    const value = event as unknown as { type: string; properties?: { info?: { sessionID?: unknown; role?: unknown; agent?: unknown } } };
+    const info = value.properties?.info;
+    if (value.type !== "message.updated" || info?.role !== "assistant" || typeof info.agent !== "string" || typeof info.sessionID !== "string") return;
+    const agent = info.agent;
+    const activeAgentRole = agent === "router" || agent === "orchestrator" ? "coordinator" : "UNKNOWN";
+    const existing = await this.registry.get(info.sessionID);
+    await this.registry.put({
+      sessionID: info.sessionID, workspaceRoot: existing?.workspaceRoot ?? this.options.worktree, repositoryRoot: existing?.repositoryRoot ?? this.options.directory,
+      activeAgentRole, activeAgentID: agent, ledgerPath: existing?.ledgerPath, rulesetRoot: existing?.rulesetRoot ?? this.config.rulesetRoot!, rulesetCommit: existing?.rulesetCommit,
+      activeOverlays: existing?.activeOverlays ?? [this.config.baseRules], currentPlanID: existing?.currentPlanID, currentGate: existing?.currentGate,
+      lastCheckpointID: existing?.lastCheckpointID, lastCheckpointAt: existing?.lastCheckpointAt, recoveryDelivered: existing?.recoveryDelivered,
+    });
+  }
+
+  private async requireRouterAuthority(sessionID: string): Promise<void> {
+    if (!this.config.orchestrator.requireRouterAuthority) return;
+    const state = await this.registry.get(sessionID);
+    if (!state || state.activeAgentRole !== "coordinator" || !["router", "orchestrator"].includes(state.activeAgentID ?? "")) throw new Error("unauthorized_router");
+  }
+
   private async persistTransitionDecision(sessionID: string, callID: string, dispatch: DispatchContract, result: DispatchResult): Promise<TransitionDecision> {
     return withLock(this.dispatchStateLock(), async () => {
       const ledger = await this.loadWritableLedger(sessionID);
@@ -366,6 +388,8 @@ export class OpenCodeAdapter {
     const violation = validateResult(parsed.result, dispatch)[0];
     if (violation) { await this.persistResultOrReject(input.sessionID, input.callID, undefined, violation.code); throw new Error(resultRejectionMessage(violation.code)); }
     await this.persistResultOrReject(input.sessionID, input.callID, parsed.result);
+    try { await this.requireRouterAuthority(input.sessionID); }
+    catch { throw new Error("DYNOVO_TRANSITION_REJECTED: unauthorized_router"); }
     let decision: TransitionDecision;
     try { decision = await this.persistTransitionDecision(input.sessionID, input.callID, dispatch, parsed.result); }
     catch { throw new Error("DYNOVO_TRANSITION_REJECTED: persistence_failed"); }

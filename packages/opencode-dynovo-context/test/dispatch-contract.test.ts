@@ -59,6 +59,10 @@ function resultOutput(value: Record<string, unknown>): string {
   return `DYNOVO_RESULT_V1\n${JSON.stringify(value)}\n\nCompleted the bounded task.`;
 }
 
+async function bindRouter(adapter: Awaited<ReturnType<typeof createOpenCodeAdapter>>, sessionID: string): Promise<void> {
+  await adapter.hooks.event({ event: { type: "message.updated", properties: { info: { sessionID, role: "assistant", agent: "router" } } } as never });
+}
+
 test("dispatch validator accepts a complete bounded implementation contract", () => {
   assert.deepEqual(validateDispatch(dispatch()), []);
 });
@@ -212,6 +216,7 @@ test("task after-hook correlates and validates one result per accepted dispatch"
   const after = adapter.hooks["tool.execute.after"];
   const input = { tool: "task", sessionID: "ses_result", callID: "call_result_1" };
   const args = { prompt: taskPrompt(dispatch()) };
+  await bindRouter(adapter, input.sessionID);
 
   await before(input, { args });
   await assert.rejects(
@@ -243,6 +248,7 @@ test("fresh adapter recovers a pending dispatch from the AXL-S ledger", async ()
   const input = { tool: "task", sessionID: "ses_restart", callID: "call_restart" };
   const args = { prompt: taskPrompt(dispatch()) };
   const first = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  await bindRouter(first, input.sessionID);
   await first.hooks["tool.execute.before"](input, { args });
 
   const restarted = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
@@ -316,6 +322,7 @@ test("concurrent adapters preserve every dispatch and result record", async () =
     createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root }),
     createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root }),
   ]);
+  await bindRouter(adapters[0]!, "ses_concurrent_dispatch");
   const calls = Array.from({ length: 12 }, (_, index) => ({
     input: { tool: "task", sessionID: "ses_concurrent_dispatch", callID: `call_concurrent_${index}` },
     dispatch: dispatch({ task_id: `TASK-${index}` }),
@@ -378,6 +385,7 @@ test("accepted result appends a transition and rejects a stale repeat for the sa
   const first = { tool: "task", sessionID: "ses_transition", callID: "call_transition_1" };
   const second = { ...first, callID: "call_transition_2" };
   const args = { prompt: taskPrompt(dispatch()) };
+  await bindRouter(adapter, first.sessionID);
 
   await adapter.hooks["tool.execute.before"](first, { args });
   await adapter.hooks["tool.execute.after"]({ ...first, args }, { title: "Task", output: resultOutput(result()), metadata: {} });
@@ -401,6 +409,7 @@ test("blocked result records a decision without advancing the task state", async
   const first = { tool: "task", sessionID: "ses_blocked_transition", callID: "call_blocked_1" };
   const second = { ...first, callID: "call_blocked_2" };
   const args = { prompt: taskPrompt(dispatch()) };
+  await bindRouter(adapter, first.sessionID);
 
   await adapter.hooks["tool.execute.before"](first, { args });
   await adapter.hooks["tool.execute.after"](
@@ -414,4 +423,17 @@ test("blocked result records a decision without advancing the task state", async
   assert.match(ledger, /decision=blocked/);
   assert.match(ledger, /reason=result_blocked/);
   assert.match(ledger, /decision=accepted/);
+});
+
+test("unbound sessions cannot advance workflow state", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-unbound-router-"));
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  const input = { tool: "task", sessionID: "ses_unbound_router", callID: "call_unbound_router" };
+  const args = { prompt: taskPrompt(dispatch()) };
+  await adapter.hooks["tool.execute.before"](input, { args });
+
+  await assert.rejects(
+    adapter.hooks["tool.execute.after"]({ ...input, args }, { title: "Task", output: resultOutput(result()), metadata: {} }),
+    /DYNOVO_TRANSITION_REJECTED: unauthorized_router/,
+  );
 });
