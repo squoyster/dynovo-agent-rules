@@ -16,7 +16,7 @@
     "schema.json"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
