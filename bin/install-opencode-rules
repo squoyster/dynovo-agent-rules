@@ -58,4 +58,6 @@ if [[ "$WITH_CONTEXT" -eq 1 ]] && ! grep -Fq -- "$PLUGIN" "$CONFIG"; then
 fi
 if [[ "$CONFIG" == *.json ]]; then
   jq empty "$CONFIG" || { echo "Installer produced invalid JSON: $CONFIG" >&2; exit 1; }
+else
+  node -e 'const fs=require("node:fs"); const ts=require(process.argv[1]); const file=process.argv[2]; const result=ts.parseConfigFileTextToJson(file, fs.readFileSync(file, "utf8")); if (result.error) { console.error(`Installer produced invalid JSONC: ${file}: ${ts.flattenDiagnosticMessageText(result.error.messageText, " ")}`); process.exit(1); }' "$PLUGIN_DIR/node_modules/typescript/lib/typescript.js" "$CONFIG"
 fi

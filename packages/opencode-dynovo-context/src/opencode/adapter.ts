@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { minimalLedgerProjection, projectLedger, type LedgerProjection } from "../axls/projector.js";
@@ -76,7 +76,8 @@ export class OpenCodeAdapter {
   }
 
   pendingRecovery(sessionID: string): RecoveryState | undefined { return this.recovery.get(sessionID); }
-  private checkpointID(sessionID: string): string { return `chk_${createHash("sha256").update(`${sessionID}\0${this.options.worktree}`).digest("hex").slice(0, 16)}`; }
+  /** A prepared checkpoint is deduplicated only until its matching compaction event. */
+  private checkpointID(): string { return `chk_${randomUUID().replaceAll("-", "")}`; }
   private checkpointDirectory(sessionID: string): string { return join(this.options.worktree, this.config.stateDirectory, "checkpoints", safeSessionID(sessionID)); }
 
   private async loadLedger(sessionID: string): Promise<{ path: string; projection: LedgerProjection }> {
@@ -123,7 +124,7 @@ export class OpenCodeAdapter {
         }
       }
       const createdAt = new Date().toISOString();
-      const id = this.checkpointID(sessionID);
+      const id = this.checkpointID();
       const capsuleModel: ProtectedCheckpoint = {
         sessionID, checkpointID: id, createdAt, workspaceRoot: this.options.worktree, rulesetRoot: this.config.rulesetRoot!, rulesetCommit: existing?.rulesetCommit ?? "UNKNOWN", baseRules: this.config.baseRules, activeOverlays,
         ledgerPath, ledgerVersion: projection.ledgerVersion, activeRole: role.role, activeAgentID: existing?.activeAgentID ?? "UNKNOWN", delegationParent: existing?.delegationParent ?? "NONE", delegatedTask: existing?.delegatedTaskID ?? "NONE", allowedActions: role.allowed, forbiddenActions: role.forbidden,
@@ -166,19 +167,21 @@ export class OpenCodeAdapter {
   private async event(input: { event: CompactionEvent }): Promise<void> {
     if (input.event.type !== "session.compacted") return;
     const sessionID = input.event.properties?.sessionID;
-    if (!sessionID || this.recovery.has(sessionID)) return;
+    if (!sessionID) return;
     const prepared = this.prepared.get(sessionID);
-    if (prepared) {
-      const state = await this.registry.get(sessionID);
-      const record = JSON.parse(await readFile(prepared.checkpointPath, "utf8")) as Record<string, unknown>;
-      await atomicWrite(prepared.checkpointPath, `${JSON.stringify({ ...record, status: "successful" }, null, 2)}\n`);
-      try {
-        const projection = projectLedger(await readFile(prepared.ledgerPath, "utf8"));
-        projection.document.appendRecord("LOG", `checkpoint_${prepared.id}_success`, { event: "compaction_checkpoint_success", checkpoint_id: prepared.id, status: "successful" });
-        projection.document.appendRecord("CHECKPOINTS", `${prepared.id}_success`, { checkpoint_id: prepared.id, session_id: sessionID, ledger_revision: projection.ledgerVersion, ruleset_commit: state?.rulesetCommit ?? "UNKNOWN", active_agent_role: state?.activeAgentRole ?? "UNKNOWN", current_plan_id: state?.currentPlanID ?? "NONE", capsule_digest: String(record.capsule_digest ?? "UNKNOWN"), created_at: new Date().toISOString(), status: "successful" });
-        await atomicWrite(prepared.ledgerPath, projection.document.serialize());
-      } catch (error) { this.options.onDiagnostic?.(`Dynovo context plugin: could not append recovery log (${error instanceof Error ? error.message : "UNKNOWN"}).`); }
-    }
+    // OpenCode may emit a duplicate event. With no currently prepared attempt,
+    // it cannot acknowledge a new recovery cycle and is intentionally ignored.
+    if (!prepared) return;
+    const state = await this.registry.get(sessionID);
+    const record = JSON.parse(await readFile(prepared.checkpointPath, "utf8")) as Record<string, unknown>;
+    await atomicWrite(prepared.checkpointPath, `${JSON.stringify({ ...record, status: "successful" }, null, 2)}\n`);
+    try {
+      const projection = projectLedger(await readFile(prepared.ledgerPath, "utf8"));
+      projection.document.appendRecord("LOG", `checkpoint_${prepared.id}_success`, { event: "compaction_checkpoint_success", checkpoint_id: prepared.id, status: "successful" });
+      projection.document.appendRecord("CHECKPOINTS", `${prepared.id}_success`, { checkpoint_id: prepared.id, session_id: sessionID, ledger_revision: projection.ledgerVersion, ruleset_commit: state?.rulesetCommit ?? "UNKNOWN", active_agent_role: state?.activeAgentRole ?? "UNKNOWN", current_plan_id: state?.currentPlanID ?? "NONE", capsule_digest: String(record.capsule_digest ?? "UNKNOWN"), created_at: new Date().toISOString(), status: "successful" });
+      await atomicWrite(prepared.ledgerPath, projection.document.serialize());
+    } catch (error) { this.options.onDiagnostic?.(`Dynovo context plugin: could not append recovery log (${error instanceof Error ? error.message : "UNKNOWN"}).`); }
+    this.prepared.delete(sessionID);
     this.recovery.set(sessionID, { deliveries: 1, instruction: recoveryInstruction, injected: false });
   }
 

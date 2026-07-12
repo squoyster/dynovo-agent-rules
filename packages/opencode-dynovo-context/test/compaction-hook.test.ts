@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { createOpenCodeAdapter } from "../src/opencode/adapter.ts";
-import { SessionRegistry } from "../src/session-registry.ts";
+import { SessionRegistry, withLock } from "../src/session-registry.ts";
 
 test("hook persists one checkpoint before injecting one capsule and prompt", async () => {
   const root = await mkdtemp(join(tmpdir(), "dynovo-hook-"));
@@ -68,6 +68,26 @@ test("successful compaction requests recovery exactly once", async () => {
   );
 });
 
+test("each successful compaction gets a fresh checkpoint and one recovery cycle", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-repeated-compaction-"));
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  const first = { context: [] as string[] };
+  await adapter.hooks["experimental.session.compacting"]?.({ sessionID: "ses_repeat" }, first);
+  await adapter.hooks.event?.({ event: { type: "session.compacted", properties: { sessionID: "ses_repeat" } } });
+  const firstRecovery = { parts: [] as unknown[] };
+  await adapter.hooks["chat.message"]?.({ sessionID: "ses_repeat" }, firstRecovery);
+
+  const second = { context: [] as string[] };
+  await adapter.hooks["experimental.session.compacting"]?.({ sessionID: "ses_repeat" }, second);
+  await adapter.hooks.event?.({ event: { type: "session.compacted", properties: { sessionID: "ses_repeat" } } });
+  const secondRecovery = { parts: [] as unknown[] };
+  await adapter.hooks["chat.message"]?.({ sessionID: "ses_repeat" }, secondRecovery);
+
+  assert.notEqual(first.context[0]?.match(/checkpoint_id=(chk_[^\n]+)/)?.[1], second.context[0]?.match(/checkpoint_id=(chk_[^\n]+)/)?.[1]);
+  assert.equal(firstRecovery.parts.length, 1);
+  assert.equal(secondRecovery.parts.length, 1);
+});
+
 test("recovery is injected once into the resumed normal message", async () => {
   const root = await mkdtemp(join(tmpdir(), "dynovo-recovery-delivery-"));
   const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
@@ -121,4 +141,16 @@ test("unknown roles and unavailable rulesets are represented as warnings, never 
   assert.match(output.context[0] ?? "", /active_role=UNKNOWN/);
   assert.match(output.context[0] ?? "", /UNKNOWN_AGENT_ROLE: permissions are not inferred/);
   assert.match(output.context[0] ?? "", /RULESET_UNAVAILABLE:/);
+});
+
+test("stale interrupted-process locks are reclaimed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-stale-lock-"));
+  const path = join(root, "state", "transaction");
+  await mkdir(join(root, "state"), { recursive: true });
+  await writeFile(`${path}.lock`, "interrupted\n");
+  const old = new Date(Date.now() - 61_000);
+  await utimes(`${path}.lock`, old, old);
+  let ran = false;
+  await withLock(path, async () => { ran = true; });
+  assert.equal(ran, true);
 });

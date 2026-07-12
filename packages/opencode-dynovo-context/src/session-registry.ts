@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 export interface DynovoSessionState {
@@ -34,6 +34,7 @@ export async function atomicWrite(path: string, content: string): Promise<void> 
 }
 
 const inProcessLocks = new Map<string, Promise<void>>();
+const STALE_LOCK_MS = 60_000;
 
 export async function withLock<T>(path: string, operation: () => Promise<T>): Promise<T> {
   const previous = inProcessLocks.get(path) ?? Promise.resolve();
@@ -49,6 +50,13 @@ export async function withLock<T>(path: string, operation: () => Promise<T>): Pr
       try { handle = await open(lockPath, "wx", 0o600); break; }
       catch (error: unknown) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST" || attempts >= 100) throw error;
+        // Locks are advisory. A dead process cannot remove its file, so reclaim
+        // only a demonstrably stale lock rather than leaving the session blocked.
+        try {
+          if (Date.now() - (await stat(lockPath)).mtimeMs > STALE_LOCK_MS) await rm(lockPath, { force: true });
+        } catch (staleError: unknown) {
+          if ((staleError as NodeJS.ErrnoException).code !== "ENOENT") throw staleError;
+        }
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
     }
