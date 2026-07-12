@@ -16,12 +16,15 @@ async function loadBootHooks(): Promise<BootHooks> {
   return module.default();
 }
 
-const DynovoContextPlugin = async (input: { directory: string; worktree: string }, options: Record<string, unknown> = {}) => {
+const DynovoContextPlugin = async (input: { directory: string; worktree?: string }, options: Record<string, unknown> = {}) => {
   const adjacentRuleset = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const config = options.rulesetRoot === undefined && existsSync(resolve(adjacentRuleset, "AGENTS.md"))
     ? { ...options, rulesetRoot: adjacentRuleset }
     : options;
-  const adapter = await createOpenCodeAdapter({ directory: input.directory, worktree: input.worktree, config });
+  const worktree = input.worktree && dirname(input.worktree) !== input.worktree
+    ? input.worktree
+    : input.directory;
+  const adapter = await createOpenCodeAdapter({ directory: input.directory, worktree, config });
   if (options.enabled === false) return adapter.hooks;
   const boot = await loadBootHooks();
   const event: NonNullable<Hooks["event"]> = async (eventInput) => {

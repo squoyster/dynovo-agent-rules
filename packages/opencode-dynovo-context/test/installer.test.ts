@@ -63,6 +63,7 @@ test("installer adds missing arrays with portable awk", async () => {
     readFile(join(deploymentRoot, "skills/axl-encode/SKILL.md"), "utf8"),
     readFile(join(deploymentRoot, ".specs/Rigorous-Agentic-Development-Specification.md"), "utf8"),
     readFile(join(deploymentRoot, "docs/axl-router-agentic-spec.md"), "utf8"),
+    readFile(join(deploymentRoot, "bin/test-opencode-router-integration"), "utf8"),
     readFile(join(deploymentRoot, "plugin/axl-boot.mjs"), "utf8"),
   ]);
   await assert.rejects(

@@ -23,6 +23,13 @@ Run `./bin/install-opencode-rules --with-context-plugin --activate-router` for
 the tactical router harness, or `--rules-only` for definitions without changing
 the configured plugin. Use `--dry-run` to preview changes.
 
+After installation, run `dynovo-agent-rules/bin/test-opencode-router-integration`
+from a workspace containing `AGENTS.md`. It performs one read-only native
+router dispatch and fails unless OpenCode reports the task call and Dynovo
+persists matching router identity, dispatch, passing evidence, and an accepted
+`INTAKE -> DISCOVERY` transition. `OPENCODE_BIN` may name a non-default
+OpenCode executable.
+
 `OPENCODE_CONFIG` is authoritative when set. Otherwise the installer selects
 `opencode.jsonc` or `opencode.json` under XDG config. A managed
 `dynovo-agent-rules/` directory beside that config receives copied, refreshable

@@ -46,6 +46,8 @@ deploy_bundle() {
     mkdir -p "$stage/$directory"
     cp -R "$ROOT/$directory/." "$stage/$directory/"
   done
+  mkdir -p "$stage/bin"
+  cp "$ROOT/bin/test-opencode-router-integration" "$stage/bin/test-opencode-router-integration"
   if [[ "$WITH_CONTEXT" -eq 1 ]]; then
     [[ -f "$PLUGIN_DIR/package.json" ]] || { echo "Missing local plugin package: $PLUGIN_DIR" >&2; exit 1; }
     (cd "$PLUGIN_DIR" && npm run build >/dev/null)

@@ -1,7 +1,22 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import DynovoContextPlugin from "../src/index.ts";
+
+test("plugin falls back to directory when OpenCode has no Git worktree", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "dynovo-non-git-workspace-"));
+  const hooks = await DynovoContextPlugin({ directory, worktree: "/" });
+  await hooks["experimental.session.compacting"]?.(
+    { sessionID: "ses_non_git" },
+    { context: [] },
+  );
+
+  const ledger = await readFile(join(directory, ".dynovo/state/tasks/ses_non_git.axls"), "utf8");
+  assert.match(ledger, /event=compaction_checkpoint_prepared/);
+});
 
 test("plugin exposes the AXL boot system transform", async () => {
   const hooks = await DynovoContextPlugin({ directory: "/tmp", worktree: "/tmp" });

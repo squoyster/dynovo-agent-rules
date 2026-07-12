@@ -1,0 +1,137 @@
+#!/usr/bin/env node
+
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+
+function usage() {
+  return `usage: bin/test-opencode-router-integration [--workspace PATH] [--timeout MS]
+
+Runs one read-only native OpenCode router dispatch and verifies its durable
+Dynovo session, dispatch, result, and INTAKE -> DISCOVERY transition evidence.
+
+Environment:
+  OPENCODE_BIN  OpenCode executable path (default: opencode)`;
+}
+
+function parseArguments(argv) {
+  const options = { workspace: process.cwd(), timeout: 180_000 };
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "--help" || argument === "-h") {
+      console.log(usage());
+      process.exit(0);
+    }
+    if (argument === "--workspace") {
+      const value = argv[index += 1];
+      if (!value) throw new Error("--workspace requires a path");
+      options.workspace = resolve(value);
+      continue;
+    }
+    if (argument === "--timeout") {
+      const value = Number(argv[index += 1]);
+      if (!Number.isSafeInteger(value) || value <= 0) throw new Error("--timeout requires a positive integer");
+      options.timeout = value;
+      continue;
+    }
+    throw new Error(`unknown argument: ${argument}`);
+  }
+  return options;
+}
+
+function parseJsonLines(output) {
+  return output.split(/\r?\n/).flatMap((line) => {
+    if (!line.startsWith("{")) return [];
+    try { return [JSON.parse(line)]; }
+    catch { return []; }
+  });
+}
+
+function requireRecord(lines, prefix, fields) {
+  const record = lines.find((line) => line.startsWith(prefix) && fields.every((field) => line.includes(field)));
+  if (!record) throw new Error(`missing durable ${prefix} record: ${fields.join(", ")}`);
+}
+
+async function main() {
+  const options = parseArguments(process.argv.slice(2));
+  const taskID = `LIVE-ROUTER-INTEGRATION-${randomUUID().slice(0, 8).toUpperCase()}`;
+  const contract = {
+    task_id: taskID,
+    current_state: "INTAKE",
+    requested_transition: "DISCOVERY",
+    request_kind: "inspect",
+    mutation_authorized: false,
+    agent: "explore",
+    role: "explorer",
+    model_tier: "short",
+    policy_bundle: ["axl/types.axlt", "rules/base.axlr"],
+    task: "Read AGENTS.md and report its first Markdown heading. Do not modify files.",
+    acceptance_criteria: ["Report the first AGENTS.md heading without modifying files."],
+    allowed_actions: ["inspect repository"],
+    forbidden_actions: ["modify workspace", "advance global workflow state"],
+    required_evidence: ["AGENTS heading inspected"],
+    completion_boundary: "Return the result envelope and stop.",
+    assumptions: [],
+    unresolved: [],
+  };
+  const result = {
+    dispatch_id: taskID,
+    status: "PASS",
+    claimed_transition: "DISCOVERY",
+    actions: ["inspect repository"],
+    changed_files: [],
+    commands: [],
+    exit_codes: [],
+    evidence: ["AGENTS heading inspected"],
+    assumptions: [],
+    blockers: [],
+    scope_changes: [],
+    policy_expansion_requested: [],
+  };
+  const prompt = `Use the native task tool exactly once. Its prompt MUST begin with:\nDYNOVO_DISPATCH_V1\n${JSON.stringify(contract)}\n\nRequire the worker output to begin exactly with:\nDYNOVO_RESULT_V1\n${JSON.stringify(result)}\n\nIt may append the first AGENTS.md heading. Do not inspect the file yourself, modify anything, or call another tool. Report the outcome.`;
+  const executable = process.env.OPENCODE_BIN || "opencode";
+  const execution = spawnSync(executable, [
+    "run", "--agent", "router", "--format", "json", "--auto",
+    "--title", `dynovo-router-integration-${taskID.toLowerCase()}`, prompt,
+  ], {
+    cwd: options.workspace,
+    env: { ...process.env, DYNOVO_INTEGRATION_TASK_ID: taskID },
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: options.timeout,
+  });
+  if (execution.error) throw execution.error;
+  if (execution.status !== 0) {
+    throw new Error(`opencode run exited ${execution.status}:\n${execution.stderr.slice(-4000)}`);
+  }
+
+  const events = parseJsonLines(execution.stdout);
+  const taskEvent = events.find((event) => event?.type === "tool_use"
+    && event?.part?.tool === "task"
+    && event?.part?.state?.status === "completed"
+    && event?.part?.state?.input?.prompt?.includes(taskID));
+  const sessionID = taskEvent?.sessionID ?? taskEvent?.part?.sessionID;
+  if (!sessionID) {
+    throw new Error(`native task completion event for the integration task was not observed:\n${execution.stdout.slice(-4000)}`);
+  }
+
+  const stateRoot = join(options.workspace, ".dynovo", "state");
+  const sessions = JSON.parse(await readFile(join(stateRoot, "sessions.json"), "utf8"));
+  const session = sessions[sessionID];
+  if (session?.activeAgentRole !== "coordinator" || session?.activeAgentID !== "router") {
+    throw new Error(`session ${sessionID} is not bound to router/coordinator authority`);
+  }
+  const ledger = await readFile(join(stateRoot, "tasks", `${sessionID}.axls`), "utf8");
+  const lines = ledger.split(/\r?\n/);
+  requireRecord(lines, "dispatch_", [`dispatch_id=${taskID}`, "status=pending"]);
+  requireRecord(lines, "result_", [`dispatch_id=${taskID}`, "status=PASS", "validation=passed"]);
+  requireRecord(lines, "transition_", [`dispatch_id=${taskID}`, "decision=accepted", "from=INTAKE", "to=DISCOVERY"]);
+
+  console.log(`OpenCode router integration passed task=${taskID} session=${sessionID} transition=INTAKE->DISCOVERY`);
+}
+
+main().catch((error) => {
+  console.error(`OpenCode router integration failed: ${error instanceof Error ? error.message : String(error)}`);
+  process.exitCode = 1;
+});

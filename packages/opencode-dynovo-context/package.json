@@ -19,6 +19,7 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "pretest": "npm run build",
     "test": "tsx --test test/*.test.*",
+    "test:integration:opencode": "cd ../.. && ./bin/test-opencode-router-integration",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
