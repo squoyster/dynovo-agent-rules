@@ -60,6 +60,7 @@ function render(checkpoint: ProtectedCheckpoint, plan: CapsuleItem[], failures =
     `current_focus=${value(checkpoint.currentFocus)}`,
     `current_plan_id=${value(checkpoint.currentPlanID)}`,
     `current_gate=${value(checkpoint.currentGate)}`,
+    `workflow_state=${value(checkpoint.workflowState)}`,
     `next_action=${value(checkpoint.nextAction)}`,
     "[HARD_CONSTRAINTS]",
     ...lines(checkpoint.constraints, item => `- ${value(item.id)}: ${value(item.text)}`),

@@ -334,7 +334,8 @@ test("concurrent adapters preserve every dispatch and result record", async () =
   const ledger = await readFile(join(root, ".dynovo/state/tasks/ses_concurrent_dispatch.axls"), "utf8");
   assert.equal(ledger.match(/event=dispatch_accepted/g)?.length, calls.length);
   assert.equal(ledger.match(/event=dispatch_result_recorded/g)?.length, calls.length);
-  assert.equal(ledger.match(/status=PASS/g)?.length, calls.length * 2);
+  assert.equal(ledger.match(/decision=accepted/g)?.length, calls.length * 2);
+  assert.equal(ledger.match(/status=PASS/g)?.length, calls.length * 3);
 });
 
 test("result hook reports a stable rejection when durable evidence cannot be written", async () => {
@@ -369,4 +370,48 @@ test("uncorrelated result rejection does not create an empty ledger", async () =
     readFile(join(root, ".dynovo/state/tasks/ses_uncorrelated.axls"), "utf8"),
     (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT",
   );
+});
+
+test("accepted result appends a transition and rejects a stale repeat for the same task", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-transition-ledger-"));
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  const first = { tool: "task", sessionID: "ses_transition", callID: "call_transition_1" };
+  const second = { ...first, callID: "call_transition_2" };
+  const args = { prompt: taskPrompt(dispatch()) };
+
+  await adapter.hooks["tool.execute.before"](first, { args });
+  await adapter.hooks["tool.execute.after"]({ ...first, args }, { title: "Task", output: resultOutput(result()), metadata: {} });
+  await adapter.hooks["tool.execute.before"](second, { args });
+  await assert.rejects(
+    adapter.hooks["tool.execute.after"]({ ...second, args }, { title: "Task", output: resultOutput(result()), metadata: {} }),
+    /DYNOVO_TRANSITION_REJECTED: stale_current_state/,
+  );
+
+  const ledger = await readFile(join(root, ".dynovo/state/tasks/ses_transition.axls"), "utf8");
+  assert.match(ledger, /@TRANSITIONS/);
+  assert.match(ledger, /decision=accepted/);
+  assert.match(ledger, /from=RED_ESTABLISHED/);
+  assert.match(ledger, /to=IMPLEMENTATION/);
+  assert.match(ledger, /reason=stale_current_state/);
+});
+
+test("blocked result records a decision without advancing the task state", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-blocked-transition-"));
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  const first = { tool: "task", sessionID: "ses_blocked_transition", callID: "call_blocked_1" };
+  const second = { ...first, callID: "call_blocked_2" };
+  const args = { prompt: taskPrompt(dispatch()) };
+
+  await adapter.hooks["tool.execute.before"](first, { args });
+  await adapter.hooks["tool.execute.after"](
+    { ...first, args },
+    { title: "Task", output: resultOutput(result({ status: "BLOCKED", evidence: [], blockers: ["awaiting input"] })), metadata: {} },
+  );
+  await adapter.hooks["tool.execute.before"](second, { args });
+  await adapter.hooks["tool.execute.after"]({ ...second, args }, { title: "Task", output: resultOutput(result()), metadata: {} });
+
+  const ledger = await readFile(join(root, ".dynovo/state/tasks/ses_blocked_transition.axls"), "utf8");
+  assert.match(ledger, /decision=blocked/);
+  assert.match(ledger, /reason=result_blocked/);
+  assert.match(ledger, /decision=accepted/);
 });

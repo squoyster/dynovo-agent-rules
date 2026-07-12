@@ -27,6 +27,7 @@ const checkpoint: ProtectedCheckpoint = {
   currentFocus: "t005",
   currentPlanID: "plan-01",
   currentGate: "green",
+  workflowState: "IMPLEMENTATION",
   nextAction: "Run npm test -- test/provider/fallback.test.ts --runInBand",
   constraints: [{ id: "c001", text: "Do not edit the approved red test" }],
   acceptanceCriteria: [
@@ -59,6 +60,7 @@ test("capsule is deterministic and preserves protected exact values", () => {
   assert.equal(first, second);
   assert.match(first, /^DYNOVO_PROTECTED_CONTEXT_V1\n/);
   assert.match(first, /active_role=implementer/);
+  assert.match(first, /workflow_state=IMPLEMENTATION/);
   assert.match(first, /forbidden_actions=edit production code|forbidden_actions=edit test\/provider\/fallback\.test\.ts/);
   assert.match(first, /RDEV010: Do not edit the red test\./);
   assert.match(first, /attempts=2/);

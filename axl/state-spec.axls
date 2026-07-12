@@ -3,9 +3,9 @@
 
 @META
 id: axl-s-spec
-v: 0.6
+v: 0.7
 kind: axls
-modified: @20260710
+modified: @20260712
 purpose: durable state, plans, handoffs, context pins, evidence, logs
 
 @RECORD_SYNTAX
@@ -36,12 +36,18 @@ blank_lines: ignored
 
 @BLOCKS
 required: @META
-optional: @STATE|@PLAN|@PIN|@CTX|@CTX_INDEX|@DONE_CTX|@EVIDENCE|@RISKS|@DECISIONS|@DELEGATIONS|@CHECKPOINTS|@LOG|@LOGREF|@REF|@IMPORT|@LOCK
+optional: @STATE|@PLAN|@PIN|@CTX|@CTX_INDEX|@DONE_CTX|@EVIDENCE|@RISKS|@DECISIONS|@DELEGATIONS|@TRANSITIONS|@CHECKPOINTS|@LOG|@LOGREF|@REF|@IMPORT|@LOCK
 
 @DELEGATIONS
 required_fields: id|task|role|status|objective|scope|constraints|owner|created_at|updated_at|result_ref|unresolved
 optional_fields: parent|depends_on|worktree|branch|commit|model|cost_class
 transcripts: forbidden
+
+@TRANSITIONS
+required_fields: dispatch_id|session_id|call_id|current_state|requested_transition|status|decision|reason|recorded_at
+accepted_fields: from|to
+decision_values: accepted|blocked|rejected
+append_only: ?1
 
 @CHECKPOINTS
 required_fields: checkpoint_id|session_id|ledger_revision|ruleset_commit|active_agent_role|current_plan_id|capsule_digest|created_at|status

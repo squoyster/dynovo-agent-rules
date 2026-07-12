@@ -9,6 +9,11 @@ function state(document: AxlsDocument, name: string, fallback = "UNKNOWN"): stri
   return records(document, "STATE").find((record) => record.id === name)?.fields.value ?? fallback;
 }
 
+function workflowState(document: AxlsDocument): string {
+  const accepted = [...records(document, "TRANSITIONS")].reverse().find((record) => record.fields.decision === "accepted");
+  return accepted?.fields.to ?? state(document, "workflow_state", "INTAKE");
+}
+
 function item(record: AxlsRecord): CapsuleItem {
   return { id: record.id, text: record.fields.value ?? record.raw, status: record.fields.status, evidence: record.fields.evidence, owner: record.fields.owner, action: record.fields.action };
 }
@@ -22,6 +27,7 @@ export interface LedgerProjection {
   currentFocus: string;
   currentPlanID: string;
   currentGate: string;
+  workflowState: string;
   nextAction: string;
   constraints: CapsuleItem[];
   acceptanceCriteria: Array<CapsuleItem & { status: string; evidence: string }>;
@@ -45,7 +51,7 @@ export function projectLedger(source: string): LedgerProjection {
   const failures = records(document, "FAILURES").map((record) => ({ id: record.id, command: record.fields.command ?? "UNKNOWN", exitCode: record.fields.exit_code ?? "UNKNOWN", error: record.fields.error ?? "UNKNOWN", hypothesisStatus: record.fields.hypothesis_status ?? "unverified", evidence: record.fields.evidence ?? "NONE" }));
   const delegations = records(document, "DELEGATIONS").map((record) => ({ id: record.id, status: record.fields.status ?? "UNKNOWN", owner: record.fields.owner ?? record.fields.role ?? "UNKNOWN", action: record.fields.objective ?? record.raw, evidence: record.fields.result_ref ?? "NONE" }));
   return {
-    document, ledgerVersion: version, objective: state(document, "objective"), status: state(document, "status", "TODO"), risk: state(document, "risk", "LOW"), currentFocus: state(document, "current_focus"), currentPlanID: state(document, "current_plan_id", plan.find((entry) => entry.status !== "DONE")?.id ?? "NONE"), currentGate: state(document, "current_gate", "NONE"), nextAction: state(document, "next_action", "Reload canonical state before acting"),
+    document, ledgerVersion: version, objective: state(document, "objective"), status: state(document, "status", "TODO"), risk: state(document, "risk", "LOW"), currentFocus: state(document, "current_focus"), currentPlanID: state(document, "current_plan_id", plan.find((entry) => entry.status !== "DONE")?.id ?? "NONE"), currentGate: state(document, "current_gate", "NONE"), workflowState: workflowState(document), nextAction: state(document, "next_action", "Reload canonical state before acting"),
     constraints: records(document, "PIN").map(item), acceptanceCriteria: criteria, plan, failures,
     verification: records(document, "EVIDENCE").map(item), decisions: records(document, "DECISIONS").map(item), rejectedApproaches: records(document, "REJECTED_APPROACHES").map(item), openQuestions: records(document, "OPEN_QUESTIONS").map(item), delegations, warnings: [],
   };

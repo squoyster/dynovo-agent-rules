@@ -20,6 +20,23 @@ test("multi-agent ledger gives the coordinator a deterministic resume state", as
   assert.equal(state.rejectedApproaches[0]?.id, "r001");
 });
 
+test("ledger projects the latest accepted append-only workflow transition", () => {
+  const state = projectLedger(`@META
+id: transitions
+v: 1
+kind: axls
+
+@STATE
+workflow_state: INTAKE
+
+@TRANSITIONS
+t001 decision=accepted dispatch_id=TASK-1 to=DISCOVERY
+t002 decision=blocked dispatch_id=TASK-1
+t003 decision=accepted dispatch_id=TASK-1 to=SPECIFICATION
+`);
+  assert.equal(state.workflowState, "SPECIFICATION");
+});
+
 test("compaction hook renders the multi-agent protected capsule", async () => {
   const source = await readFile(new URL("./fixtures/end-to-end.axls", import.meta.url), "utf8");
   const root = await mkdtemp(join(tmpdir(), "dynovo-e2e-hook-"));

@@ -10,6 +10,7 @@ import type { ProtectedCheckpoint } from "../compaction/types.js";
 import { resolveConfig, type DynovoContextConfig } from "../config.js";
 import { resolveRole } from "../orchestration/roles.js";
 import { dispatchRejectionMessage, parseDispatchEnvelope, parseResultEnvelope, resultRejectionMessage, validateDispatch, validateResult, type DispatchContract, type DispatchResult } from "../orchestration/dispatch.js";
+import { evaluateTransition, type TransitionDecision } from "../orchestration/transitions.js";
 import { resolveActiveObligations } from "../rule-resolver.js";
 import { atomicWrite, SessionRegistry, withLock } from "../session-registry.js";
 
@@ -171,7 +172,7 @@ export class OpenCodeAdapter {
       const capsuleModel: ProtectedCheckpoint = {
         sessionID, checkpointID: id, createdAt, workspaceRoot: this.options.worktree, rulesetRoot: this.config.rulesetRoot!, rulesetCommit: existing?.rulesetCommit ?? "UNKNOWN", baseRules: this.config.baseRules, activeOverlays,
         ledgerPath, ledgerVersion: projection.ledgerVersion, activeRole: role.role, activeAgentID: existing?.activeAgentID ?? "UNKNOWN", delegationParent: existing?.delegationParent ?? "NONE", delegatedTask: existing?.delegatedTaskID ?? "NONE", allowedActions: role.allowed, forbiddenActions: role.forbidden,
-        objective: projection.objective, status: projection.status, risk: projection.risk, currentFocus: projection.currentFocus, currentPlanID: projection.currentPlanID, currentGate: projection.currentGate, nextAction: projection.nextAction,
+        objective: projection.objective, status: projection.status, risk: projection.risk, currentFocus: projection.currentFocus, currentPlanID: projection.currentPlanID, currentGate: projection.currentGate, workflowState: projection.workflowState, nextAction: projection.nextAction,
         constraints: projection.constraints, acceptanceCriteria: projection.acceptanceCriteria, obligations, plan: [...projection.plan, ...projection.delegations], files: [], decisions: projection.decisions, rejectedApproaches: projection.rejectedApproaches, failures: projection.failures, verification: projection.verification, openQuestions: [...projection.openQuestions, ...projection.warnings], redactions: 0,
       };
       const capsule = renderProtectedContextCapsule(capsuleModel, this.config.capsule);
@@ -308,6 +309,32 @@ export class OpenCodeAdapter {
     catch { throw new Error(resultRejectionMessage("persistence_failed")); }
   }
 
+  private currentWorkflowState(ledger: LedgerProjection, dispatchID: string, fallback: string): string {
+    const transitions = ledger.document.blocks.get("TRANSITIONS")?.records ?? [];
+    const accepted = [...transitions].reverse().find((record) => record.fields.dispatch_id === dispatchID && record.fields.decision === "accepted");
+    return accepted?.fields.to ?? ledger.document.blocks.get("STATE")?.records.find((record) => record.id === "workflow_state")?.fields.value ?? fallback;
+  }
+
+  private async persistTransitionDecision(sessionID: string, callID: string, dispatch: DispatchContract, result: DispatchResult): Promise<TransitionDecision> {
+    return withLock(this.dispatchStateLock(), async () => {
+      const ledger = await this.loadWritableLedger(sessionID);
+      const currentState = this.currentWorkflowState(ledger.projection, dispatch.task_id, dispatch.current_state);
+      const decision = evaluateTransition(currentState, dispatch, result);
+      const id = `transition_${dispatchStorageKey(sessionID, callID)}`;
+      const reason = "reason" in decision ? decision.reason : "evidence_valid";
+      const fields: Record<string, string> = {
+        dispatch_id: dispatch.task_id, session_id: sessionID, call_id: callID, current_state: currentState,
+        requested_transition: dispatch.requested_transition, status: result.status, decision: decision.decision,
+        reason, recorded_at: new Date().toISOString(),
+      };
+      if (decision.decision === "accepted") { fields.from = decision.from; fields.to = decision.to; }
+      ledger.projection.document.appendRecord("TRANSITIONS", id, fields);
+      ledger.projection.document.appendRecord("LOG", `${id}_decided`, { event: "transition_decided", dispatch_id: dispatch.task_id, session_id: sessionID, call_id: callID, decision: decision.decision, reason });
+      await atomicWrite(ledger.path, ledger.projection.document.serialize());
+      return decision;
+    });
+  }
+
   private async beforeToolExecute(input: { tool: string; sessionID: string; callID: string }, output: { args: Record<string, unknown> }): Promise<void> {
     if (!this.config.enabled || !this.config.orchestrator.enabled || input.tool !== "task") return;
     const parsed = parseDispatchEnvelope(output.args.prompt);
@@ -339,6 +366,10 @@ export class OpenCodeAdapter {
     const violation = validateResult(parsed.result, dispatch)[0];
     if (violation) { await this.persistResultOrReject(input.sessionID, input.callID, undefined, violation.code); throw new Error(resultRejectionMessage(violation.code)); }
     await this.persistResultOrReject(input.sessionID, input.callID, parsed.result);
+    let decision: TransitionDecision;
+    try { decision = await this.persistTransitionDecision(input.sessionID, input.callID, dispatch, parsed.result); }
+    catch { throw new Error("DYNOVO_TRANSITION_REJECTED: persistence_failed"); }
+    if (decision.decision === "rejected") throw new Error(`DYNOVO_TRANSITION_REJECTED: ${decision.reason}`);
   }
 }
 

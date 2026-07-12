@@ -40,6 +40,7 @@ export interface ProtectedCheckpoint {
   currentFocus: string;
   currentPlanID: string;
   currentGate: string;
+  workflowState: string;
   nextAction: string;
   constraints: CapsuleItem[];
   acceptanceCriteria: Array<CapsuleItem & { status: string; evidence: string }>;
