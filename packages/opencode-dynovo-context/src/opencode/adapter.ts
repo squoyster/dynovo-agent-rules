@@ -111,7 +111,7 @@ export class OpenCodeAdapter {
       const role = resolveRole(existing?.activeAgentRole ?? "coordinator");
       const activeOverlays = existing?.activeOverlays ?? [this.config.baseRules, "rules/context.axlr"];
       let obligations: ProtectedCheckpoint["obligations"] = [];
-      try { obligations = await resolveActiveObligations(this.config.rulesetRoot!, activeOverlays, role.role, { pre_compaction: true, context_pressure_high: true }); }
+      try { obligations = await resolveActiveObligations(this.config.rulesetRoot!, activeOverlays, role.role, { pre_compaction: true, context_pressure_high: true }, existing?.rulesetCommit ?? "UNKNOWN"); }
       catch (error) { this.options.onDiagnostic?.(`Dynovo context plugin: ruleset unavailable (${error instanceof Error ? error.message : "UNKNOWN"}).`); }
       const createdAt = new Date().toISOString();
       const id = this.checkpointID(sessionID);

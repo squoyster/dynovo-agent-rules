@@ -10,13 +10,13 @@ function safePath(root: string, path: string): string {
   return candidate;
 }
 
-export async function resolveActiveObligations(root: string, paths: string[], role = "all", facts: Record<string, boolean> = {}): Promise<ActiveObligation[]> {
+export async function resolveActiveObligations(root: string, paths: string[], role = "all", facts: Record<string, boolean> = {}, rulesetCommit = "UNKNOWN"): Promise<ActiveObligation[]> {
   const results: ActiveObligation[] = [];
   for (const path of [...new Set(paths)].sort()) {
     const absolute = safePath(root, path);
     const info = await stat(absolute);
     const factKey = Object.keys(facts).filter((key) => facts[key]).sort().join(",");
-    const cacheKey = `${absolute}:${info.mtimeMs}:${role}:${factKey}`;
+    const cacheKey = `${root}:${rulesetCommit}:${absolute}:${info.mtimeMs}:${role}:${factKey}`;
     const cached = cache.get(cacheKey);
     if (cached) { results.push(...cached); continue; }
     const obligations = (await readFile(absolute, "utf8")).split("\n").flatMap((line) => {
