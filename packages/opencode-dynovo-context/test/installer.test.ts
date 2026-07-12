@@ -78,6 +78,7 @@ test("installer adds missing arrays with portable awk", async () => {
   const hooks = await installedPlugin.default({ directory: home, worktree: home });
   assert.equal(typeof hooks["experimental.chat.system.transform"], "function");
   assert.equal(typeof hooks["tool.execute.before"], "function");
+  assert.equal(typeof hooks["tool.execute.after"], "function");
 });
 
 test("installer activates the deployed router without losing JSONC comments", async () => {

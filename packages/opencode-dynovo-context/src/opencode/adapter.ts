@@ -9,7 +9,7 @@ import { renderDynovoCompactionPrompt } from "../compaction/prompt.js";
 import type { ProtectedCheckpoint } from "../compaction/types.js";
 import { resolveConfig, type DynovoContextConfig } from "../config.js";
 import { resolveRole } from "../orchestration/roles.js";
-import { dispatchRejectionMessage, parseDispatchEnvelope, validateDispatch } from "../orchestration/dispatch.js";
+import { dispatchRejectionMessage, parseDispatchEnvelope, parseResultEnvelope, resultRejectionMessage, validateDispatch, validateResult, type DispatchContract } from "../orchestration/dispatch.js";
 import { resolveActiveObligations } from "../rule-resolver.js";
 import { atomicWrite, SessionRegistry, withLock } from "../session-registry.js";
 
@@ -59,10 +59,12 @@ export class OpenCodeAdapter {
     "experimental.session.compacting": (input: { sessionID: string }, output: CompactionOutput) => Promise<void>;
     "chat.message": (input: { sessionID: string }, output: ChatOutput) => Promise<void>;
     "tool.execute.before": (input: { tool: string; sessionID: string; callID: string }, output: { args: Record<string, unknown> }) => Promise<void>;
+    "tool.execute.after": (input: { tool: string; sessionID: string; callID: string; args: Record<string, unknown> }, output: { title: string; output: string; metadata: unknown }) => Promise<void>;
     event: (input: { event: Event }) => Promise<void>;
   };
   private readonly prepared = new Map<string, PreparedCheckpoint>();
   private readonly recovery = new Map<string, RecoveryState>();
+  private readonly acceptedDispatches = new Map<string, DispatchContract>();
   private readonly registry: SessionRegistry;
   private readonly config: DynovoContextConfig;
   private readonly options: AdapterOptions;
@@ -74,7 +76,7 @@ export class OpenCodeAdapter {
     if (this.config.dcpCoexistence && options.installedPlugins?.some((plugin) => plugin.includes("opencode-dcp"))) {
       this.options.onDiagnostic?.("Dynovo context plugin: DCP detected; selective pruning remains delegated to DCP.");
     }
-    this.hooks = { "experimental.session.compacting": this.compacting.bind(this), "chat.message": this.chatMessage.bind(this), "tool.execute.before": this.beforeToolExecute.bind(this), event: this.event.bind(this) };
+    this.hooks = { "experimental.session.compacting": this.compacting.bind(this), "chat.message": this.chatMessage.bind(this), "tool.execute.before": this.beforeToolExecute.bind(this), "tool.execute.after": this.afterToolExecute.bind(this), event: this.event.bind(this) };
   }
 
   pendingRecovery(sessionID: string): RecoveryState | undefined { return this.recovery.get(sessionID); }
@@ -196,12 +198,25 @@ export class OpenCodeAdapter {
     if (state) await this.registry.put({ ...state, recoveryDelivered: true });
   }
 
-  private async beforeToolExecute(input: { tool: string }, output: { args: Record<string, unknown> }): Promise<void> {
+  private async beforeToolExecute(input: { tool: string; sessionID: string; callID: string }, output: { args: Record<string, unknown> }): Promise<void> {
     if (!this.config.enabled || !this.config.orchestrator.enabled || input.tool !== "task") return;
     const parsed = parseDispatchEnvelope(output.args.prompt);
     if (!parsed.ok) throw new Error(dispatchRejectionMessage(parsed.reason));
     const violation = validateDispatch(parsed.dispatch)[0];
     if (violation) throw new Error(dispatchRejectionMessage(violation.code));
+    this.acceptedDispatches.set(`${input.sessionID}\0${input.callID}`, parsed.dispatch);
+  }
+
+  private async afterToolExecute(input: { tool: string; sessionID: string; callID: string }, output: { output: string }): Promise<void> {
+    if (!this.config.enabled || !this.config.orchestrator.enabled || input.tool !== "task") return;
+    const key = `${input.sessionID}\0${input.callID}`;
+    const dispatch = this.acceptedDispatches.get(key);
+    this.acceptedDispatches.delete(key);
+    if (!dispatch) throw new Error(resultRejectionMessage("missing_accepted_dispatch"));
+    const parsed = parseResultEnvelope(output.output);
+    if (!parsed.ok) throw new Error(resultRejectionMessage(parsed.reason));
+    const violation = validateResult(parsed.result, dispatch)[0];
+    if (violation) throw new Error(resultRejectionMessage(violation.code));
   }
 }
 

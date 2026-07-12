@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { parseDispatchEnvelope, validateDispatch } from "../src/index.ts";
+import { parseDispatchEnvelope, parseResultEnvelope, validateDispatch, validateResult } from "../src/index.ts";
 import { createOpenCodeAdapter } from "../src/opencode/adapter.ts";
 
 function dispatch(overrides: Record<string, unknown> = {}) {
@@ -35,6 +35,28 @@ function dispatch(overrides: Record<string, unknown> = {}) {
 
 function taskPrompt(value: Record<string, unknown>): string {
   return `DYNOVO_DISPATCH_V1\n${JSON.stringify(value)}\n\nCarry out only the bounded task.`;
+}
+
+function result(overrides: Record<string, unknown> = {}) {
+  return {
+    dispatch_id: "TASK-42",
+    status: "PASS",
+    claimed_transition: "IMPLEMENTATION",
+    actions: ["edit assigned production scope"],
+    changed_files: ["src/provider.ts"],
+    commands: ["npm test -- focused"],
+    exit_codes: [0],
+    evidence: ["npm test -- focused"],
+    assumptions: [],
+    blockers: [],
+    scope_changes: [],
+    policy_expansion_requested: [],
+    ...overrides,
+  };
+}
+
+function resultOutput(value: Record<string, unknown>): string {
+  return `DYNOVO_RESULT_V1\n${JSON.stringify(value)}\n\nCompleted the bounded task.`;
 }
 
 test("dispatch validator accepts a complete bounded implementation contract", () => {
@@ -84,6 +106,84 @@ test("dispatch envelope parser rejects malformed and accepts a versioned header"
   assert.deepEqual(parseDispatchEnvelope(taskPrompt(dispatch())), { ok: true, dispatch: dispatch() });
 });
 
+test("result envelope validates completion against its accepted dispatch", () => {
+  assert.deepEqual(parseResultEnvelope(resultOutput(result())), { ok: true, result: result() });
+  assert.deepEqual(validateResult(result(), dispatch()), []);
+  assert.deepEqual(
+    validateResult(result({ actions: ["expand scope"], evidence: [], exit_codes: [1] }), dispatch()).map((item) => item.code),
+    ["action_outside_dispatch", "failed_command", "missing_required_evidence"],
+  );
+});
+
+test("result validator rejects an incomplete result contract before correlation", () => {
+  assert.deepEqual(validateResult({} as never, dispatch()).map((item) => item.code), [
+    "missing_dispatch_id",
+    "missing_status",
+    "missing_claimed_transition",
+    "missing_actions",
+    "missing_changed_files",
+    "missing_commands",
+    "missing_exit_codes",
+    "missing_evidence",
+    "missing_assumptions",
+    "missing_blockers",
+    "missing_scope_changes",
+    "missing_policy_expansion_requested",
+  ]);
+});
+
+test("passing result cannot claim scope, policy, or writes beyond a read-only dispatch", () => {
+  const accepted = dispatch({
+    current_state: "REVIEW",
+    requested_transition: "VALIDATION",
+    request_kind: "review",
+    mutation_authorized: false,
+    agent: "plan",
+    role: "reviewer",
+    allowed_actions: ["read and report findings"],
+    required_evidence: ["review report"],
+    behavior_change: false,
+  });
+  const violations = validateResult(result({
+    claimed_transition: "COMPLETE",
+    actions: ["read and report findings"],
+    changed_files: ["src/provider.ts"],
+    commands: ["review report", "npm test"],
+    exit_codes: [0],
+    evidence: ["review report"],
+    blockers: ["unresolved finding"],
+    scope_changes: ["also refactored provider"],
+    policy_expansion_requested: ["rules/provider.axlr"],
+  }), accepted);
+
+  assert.deepEqual(violations.map((item) => item.code), [
+    "claimed_transition_mismatch",
+    "changed_files_without_authority",
+    "command_exit_code_mismatch",
+    "blockers_on_completion",
+    "scope_change_on_completion",
+    "policy_expansion_on_completion",
+  ]);
+});
+
+test("blocked result preserves failed evidence and expansion requests for router handling", () => {
+  assert.deepEqual(validateResult(result({
+    status: "BLOCKED",
+    exit_codes: [1],
+    evidence: [],
+    blockers: ["focused test still fails"],
+    scope_changes: ["provider fallback also needs repair"],
+    policy_expansion_requested: ["rules/provider.axlr"],
+  }), dispatch()), []);
+});
+
+test("result status cannot bypass pass evidence checks", () => {
+  assert.deepEqual(
+    validateResult(result({ status: "UNKNOWN" }), dispatch()).map((item) => item.code),
+    ["unknown_result_status"],
+  );
+});
+
 test("task hook blocks uncontracted and invalid native task dispatches", async () => {
   const root = await mkdtemp(join(tmpdir(), "dynovo-dispatch-hook-"));
   const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
@@ -103,4 +203,32 @@ test("task hook blocks uncontracted and invalid native task dispatches", async (
   );
   await hook({ tool: "task", sessionID: "ses_dispatch", callID: "call_3" }, { args: { prompt: taskPrompt(dispatch()) } });
   await hook({ tool: "read", sessionID: "ses_dispatch", callID: "call_4" }, { args: {} });
+});
+
+test("task after-hook correlates and validates one result per accepted dispatch", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-result-hook-"));
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  const before = adapter.hooks["tool.execute.before"];
+  const after = adapter.hooks["tool.execute.after"];
+  const input = { tool: "task", sessionID: "ses_result", callID: "call_result" };
+  const args = { prompt: taskPrompt(dispatch()) };
+
+  await before(input, { args });
+  await assert.rejects(
+    after({ ...input, args }, { title: "Task", output: "ordinary result", metadata: {} }),
+    /DYNOVO_RESULT_REJECTED: missing_result_envelope/,
+  );
+
+  await before(input, { args });
+  await assert.rejects(
+    after({ ...input, args }, { title: "Task", output: resultOutput(result({ dispatch_id: "TASK-other" })), metadata: {} }),
+    /DYNOVO_RESULT_REJECTED: dispatch_id_mismatch/,
+  );
+
+  await before(input, { args });
+  await after({ ...input, args }, { title: "Task", output: resultOutput(result()), metadata: {} });
+  await assert.rejects(
+    after({ ...input, args }, { title: "Task", output: resultOutput(result()), metadata: {} }),
+    /DYNOVO_RESULT_REJECTED: missing_accepted_dispatch/,
+  );
 });

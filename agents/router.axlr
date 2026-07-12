@@ -25,6 +25,10 @@ fields: task_id|current_state|requested_transition|request_kind|mutation_authori
 @RESULT_REQUIRED
 fields: dispatch_id|status|claimed_transition|actions|changed_files|commands|exit_codes|evidence|assumptions|blockers|scope_changes|policy_expansion_requested
 
+# Every worker result begins with this exact line, followed by one JSON object
+# carrying @RESULT_REQUIRED fields, then a blank line and optional result prose.
+# DYNOVO_RESULT_V1
+
 @OPENCODE_VALUE_ROUTES
 assignment_source: resolved_opencode_config
 router|explore: vector/opencode-zen/deepseek-v4-flash-short
@@ -82,6 +86,8 @@ AROU061: router | sufficient_evidence_for_current_decision(T) -> M stop_delegati
 AROU062: router | resolved_assignment_differs_from_catalog(A) -> M prefer_resolved_assignment_and_refresh_routing_fact(A)
 AROU063: router | before_native_task_dispatch(D) -> M encode_dispatch_header(D,DYNOVO_DISPATCH_V1)
 AROU064: router | native_task_dispatch(D) ∧ ¬valid_dispatch_header(D) -> F invoke_task(D)
+AROU065: router | before_native_task_dispatch(D) -> M require_result_header(D,DYNOVO_RESULT_V1)
+AROU066: router | delegated_result(R) ∧ ¬valid_result_header(R) -> F accept_result(R)
 
 @RULES gates
 AROU040: router | before_dispatch_implementation(T) -> M verify_approved_specification_and_baseline(T)

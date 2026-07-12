@@ -40,3 +40,14 @@ test("built plugin blocks native task calls without a dispatch envelope", async 
     /DYNOVO_DISPATCH_REJECTED: missing_dispatch_envelope/,
   );
 });
+
+test("built plugin rejects task results without an accepted dispatch", async () => {
+  const hooks = await DynovoContextPlugin({ directory: "/tmp", worktree: "/tmp" });
+  await assert.rejects(
+    hooks["tool.execute.after"](
+      { tool: "task", sessionID: "ses_dist_result", callID: "call_dist_result", args: {} },
+      { title: "Task", output: "ordinary result", metadata: {} },
+    ),
+    /DYNOVO_RESULT_REJECTED: missing_accepted_dispatch/,
+  );
+});
