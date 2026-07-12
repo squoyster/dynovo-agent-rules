@@ -59,6 +59,10 @@ function dispatchStorageKey(sessionID: string, callID: string): string {
   return createHash("sha256").update(`${sessionID}\0${callID}`).digest("hex").slice(0, 20);
 }
 
+function dispatchIntegrityDigest(values: { dispatchID: string; sessionID: string; callID: string; currentState: string; requestedTransition: string; mutationAuthorized: string; agent: string; role: string; allowedActions: string; requiredEvidence: string }): string {
+  return createHash("sha256").update(JSON.stringify(values)).digest("hex");
+}
+
 function jsonArray(value: string | undefined): unknown[] {
   if (!value) return [];
   try { const parsed: unknown = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; }
@@ -95,10 +99,14 @@ export class OpenCodeAdapter {
   private checkpointID(): string { return `chk_${randomUUID().replaceAll("-", "")}`; }
   private checkpointDirectory(sessionID: string): string { return join(this.options.worktree, this.config.stateDirectory, "checkpoints", safeSessionID(sessionID)); }
 
-  private async loadLedger(sessionID: string): Promise<{ path: string; projection: LedgerProjection }> {
+  private async resolveLedgerPath(sessionID: string): Promise<string> {
     const registered = await this.registry.get(sessionID);
     const configured = this.config.activeLedger === "auto" ? registered?.ledgerPath : this.config.activeLedger;
-    const path = configured ? workspacePath(this.options.worktree, configured) : join(this.options.worktree, this.config.stateDirectory, "state", "tasks", `${safeSessionID(sessionID)}.axls`);
+    return configured ? workspacePath(this.options.worktree, configured) : join(this.options.worktree, this.config.stateDirectory, "state", "tasks", `${safeSessionID(sessionID)}.axls`);
+  }
+
+  private async loadLedger(sessionID: string): Promise<{ path: string; projection: LedgerProjection }> {
+    const path = await this.resolveLedgerPath(sessionID);
     try { return { path, projection: projectLedger(await readFile(path, "utf8")) }; }
     catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT" && this.config.failurePolicy.missingLedger === "reconstruct-minimal") {
@@ -112,6 +120,26 @@ export class OpenCodeAdapter {
         projection.warnings.push({ id: "ledger_invalid", text: `INVALID_LEDGER: ${path}` });
         return { path, projection };
       }
+      throw error;
+    }
+  }
+
+  private async loadWritableLedger(sessionID: string): Promise<{ path: string; projection: LedgerProjection }> {
+    const path = await this.resolveLedgerPath(sessionID);
+    try { return { path, projection: projectLedger(await readFile(path, "utf8")) }; }
+    catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const source = reconstructedLedger();
+      await atomicWrite(path, source);
+      return { path, projection: projectLedger(source) };
+    }
+  }
+
+  private async loadExistingLedger(sessionID: string): Promise<{ path: string; projection: LedgerProjection } | undefined> {
+    const path = await this.resolveLedgerPath(sessionID);
+    try { return { path, projection: projectLedger(await readFile(path, "utf8")) }; }
+    catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
       throw error;
     }
   }
@@ -215,16 +243,21 @@ export class OpenCodeAdapter {
 
   private async persistDispatch(sessionID: string, callID: string, dispatch: DispatchContract): Promise<void> {
     await withLock(this.dispatchStateLock(), async () => {
-      const ledger = await this.loadLedger(sessionID);
+      const ledger = await this.loadWritableLedger(sessionID);
       const delegations = ledger.projection.document.blocks.get("DELEGATIONS")?.records ?? [];
       const evidence = ledger.projection.document.blocks.get("EVIDENCE")?.records ?? [];
       if (evidence.some((record) => record.fields.session_id === sessionID && record.fields.call_id === callID)) throw new Error("dispatch already recorded");
       const id = `dispatch_${dispatchStorageKey(sessionID, callID)}`;
       if (!delegations.some((record) => record.id === id)) {
+        const allowedActions = JSON.stringify(dispatch.allowed_actions);
+        const requiredEvidence = JSON.stringify(dispatch.required_evidence);
+        const mutationAuthorized = String(dispatch.mutation_authorized);
         ledger.projection.document.appendRecord("DELEGATIONS", id, {
           dispatch_id: dispatch.task_id, session_id: sessionID, call_id: callID, status: "pending", agent: dispatch.agent, role: dispatch.role,
-          current_state: dispatch.current_state, requested_transition: dispatch.requested_transition, mutation_authorized: String(dispatch.mutation_authorized),
-          allowed_actions: JSON.stringify(dispatch.allowed_actions), required_evidence: JSON.stringify(dispatch.required_evidence), created_at: new Date().toISOString(),
+          current_state: dispatch.current_state, requested_transition: dispatch.requested_transition, mutation_authorized: mutationAuthorized,
+          allowed_actions: allowedActions, required_evidence: requiredEvidence,
+          contract_digest: dispatchIntegrityDigest({ dispatchID: dispatch.task_id, sessionID, callID, currentState: dispatch.current_state, requestedTransition: dispatch.requested_transition, mutationAuthorized, agent: dispatch.agent, role: dispatch.role, allowedActions, requiredEvidence }),
+          created_at: new Date().toISOString(),
         });
         ledger.projection.document.appendRecord("LOG", `${id}_accepted`, { event: "dispatch_accepted", dispatch_id: dispatch.task_id, session_id: sessionID, call_id: callID, status: "pending" });
         await atomicWrite(ledger.path, ledger.projection.document.serialize());
@@ -233,12 +266,19 @@ export class OpenCodeAdapter {
   }
 
   private async recoverDispatch(sessionID: string, callID: string): Promise<DispatchContract | undefined> {
-    const ledger = await this.loadLedger(sessionID);
+    const ledger = await this.loadExistingLedger(sessionID);
+    if (!ledger) return undefined;
     const evidence = ledger.projection.document.blocks.get("EVIDENCE")?.records ?? [];
     if (evidence.some((record) => record.fields.session_id === sessionID && record.fields.call_id === callID)) return undefined;
     const id = `dispatch_${dispatchStorageKey(sessionID, callID)}`;
     const record = (ledger.projection.document.blocks.get("DELEGATIONS")?.records ?? []).find((item) => item.id === id && item.fields.status === "pending");
     if (!record) return undefined;
+    const digest = dispatchIntegrityDigest({
+      dispatchID: record.fields.dispatch_id ?? "", sessionID: record.fields.session_id ?? "", callID: record.fields.call_id ?? "", currentState: record.fields.current_state ?? "", requestedTransition: record.fields.requested_transition ?? "",
+      mutationAuthorized: record.fields.mutation_authorized ?? "", agent: record.fields.agent ?? "", role: record.fields.role ?? "",
+      allowedActions: record.fields.allowed_actions ?? "", requiredEvidence: record.fields.required_evidence ?? "",
+    });
+    if (!record.fields.contract_digest || record.fields.contract_digest !== digest) throw new Error("dispatch record tampered");
     return {
       task_id: record.fields.dispatch_id ?? "UNKNOWN", current_state: record.fields.current_state ?? "UNKNOWN", requested_transition: record.fields.requested_transition ?? "UNKNOWN",
       request_kind: "execute", mutation_authorized: record.fields.mutation_authorized === "true", agent: record.fields.agent ?? "general", role: record.fields.role ?? "UNKNOWN",
@@ -250,7 +290,7 @@ export class OpenCodeAdapter {
 
   private async persistResult(sessionID: string, callID: string, result?: DispatchResult, rejection?: string): Promise<void> {
     await withLock(this.dispatchStateLock(), async () => {
-      const ledger = await this.loadLedger(sessionID);
+      const ledger = await this.loadWritableLedger(sessionID);
       const id = `result_${dispatchStorageKey(sessionID, callID)}`;
       const fields: Record<string, string> = result ? {
         dispatch_id: result.dispatch_id, session_id: sessionID, call_id: callID, status: result.status, claimed_transition: result.claimed_transition,
@@ -261,6 +301,11 @@ export class OpenCodeAdapter {
       ledger.projection.document.appendRecord("LOG", `${id}_recorded`, { event: "dispatch_result_recorded", session_id: sessionID, call_id: callID, status: result?.status ?? "REJECTED", validation: result ? "passed" : rejection ?? "UNKNOWN" });
       await atomicWrite(ledger.path, ledger.projection.document.serialize());
     });
+  }
+
+  private async persistResultOrReject(sessionID: string, callID: string, result?: DispatchResult, rejection?: string): Promise<void> {
+    try { await this.persistResult(sessionID, callID, result, rejection); }
+    catch { throw new Error(resultRejectionMessage("persistence_failed")); }
   }
 
   private async beforeToolExecute(input: { tool: string; sessionID: string; callID: string }, output: { args: Record<string, unknown> }): Promise<void> {
@@ -282,14 +327,18 @@ export class OpenCodeAdapter {
   private async afterToolExecute(input: { tool: string; sessionID: string; callID: string }, output: { output: string }): Promise<void> {
     if (!this.config.enabled || !this.config.orchestrator.enabled || input.tool !== "task") return;
     const key = `${input.sessionID}\0${input.callID}`;
-    const dispatch = this.acceptedDispatches.get(key) ?? await this.recoverDispatch(input.sessionID, input.callID);
+    let dispatch = this.acceptedDispatches.get(key);
+    if (!dispatch) {
+      try { dispatch = await this.recoverDispatch(input.sessionID, input.callID); }
+      catch (error) { throw new Error(resultRejectionMessage(error instanceof Error && error.message === "dispatch record tampered" ? "dispatch_record_tampered" : "persistence_failed")); }
+    }
     this.acceptedDispatches.delete(key);
     if (!dispatch) throw new Error(resultRejectionMessage("missing_accepted_dispatch"));
     const parsed = parseResultEnvelope(output.output);
-    if (!parsed.ok) { await this.persistResult(input.sessionID, input.callID, undefined, parsed.reason); throw new Error(resultRejectionMessage(parsed.reason)); }
+    if (!parsed.ok) { await this.persistResultOrReject(input.sessionID, input.callID, undefined, parsed.reason); throw new Error(resultRejectionMessage(parsed.reason)); }
     const violation = validateResult(parsed.result, dispatch)[0];
-    if (violation) { await this.persistResult(input.sessionID, input.callID, undefined, violation.code); throw new Error(resultRejectionMessage(violation.code)); }
-    await this.persistResult(input.sessionID, input.callID, parsed.result);
+    if (violation) { await this.persistResultOrReject(input.sessionID, input.callID, undefined, violation.code); throw new Error(resultRejectionMessage(violation.code)); }
+    await this.persistResultOrReject(input.sessionID, input.callID, parsed.result);
   }
 }
 

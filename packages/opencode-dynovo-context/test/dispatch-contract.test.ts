@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -261,4 +261,112 @@ test("fresh adapter recovers a pending dispatch from the AXL-S ledger", async ()
   assert.match(ledger, /status=PASS/);
   assert.match(ledger, /@LOG/);
   assert.match(ledger, /dispatch_result_recorded/);
+  const replayed = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  await assert.rejects(
+    replayed.hooks["tool.execute.after"](
+      { ...input, args },
+      { title: "Task", output: resultOutput(result()), metadata: {} },
+    ),
+    /DYNOVO_RESULT_REJECTED: missing_accepted_dispatch/,
+  );
+});
+
+test("dispatch persistence fails closed without overwriting a malformed ledger", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-malformed-ledger-"));
+  const ledgerPath = join(root, ".dynovo/state/tasks/ses_malformed.axls");
+  await mkdir(join(root, ".dynovo/state/tasks"), { recursive: true });
+  const malformed = "@STATE\nobjective: preserve this malformed source\n";
+  await writeFile(ledgerPath, malformed);
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+
+  await assert.rejects(
+    adapter.hooks["tool.execute.before"](
+      { tool: "task", sessionID: "ses_malformed", callID: "call_malformed" },
+      { args: { prompt: taskPrompt(dispatch()) } },
+    ),
+    /DYNOVO_DISPATCH_REJECTED: persistence_failed/,
+  );
+  assert.equal(await readFile(ledgerPath, "utf8"), malformed);
+});
+
+test("restart recovery rejects a tampered persisted dispatch contract", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-tampered-dispatch-"));
+  const input = { tool: "task", sessionID: "ses_tampered", callID: "call_tampered" };
+  const args = { prompt: taskPrompt(dispatch()) };
+  const first = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  await first.hooks["tool.execute.before"](input, { args });
+
+  const ledgerPath = join(root, ".dynovo/state/tasks/ses_tampered.axls");
+  const ledger = await readFile(ledgerPath, "utf8");
+  await writeFile(ledgerPath, ledger.replace("requested_transition=IMPLEMENTATION", "requested_transition=COMPLETE"));
+  const restarted = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+
+  await assert.rejects(
+    restarted.hooks["tool.execute.after"](
+      { ...input, args },
+      { title: "Task", output: resultOutput(result({ claimed_transition: "COMPLETE" })), metadata: {} },
+    ),
+    /DYNOVO_RESULT_REJECTED: dispatch_record_tampered/,
+  );
+});
+
+test("concurrent adapters preserve every dispatch and result record", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-concurrent-dispatch-"));
+  const adapters = await Promise.all([
+    createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root }),
+    createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root }),
+  ]);
+  const calls = Array.from({ length: 12 }, (_, index) => ({
+    input: { tool: "task", sessionID: "ses_concurrent_dispatch", callID: `call_concurrent_${index}` },
+    dispatch: dispatch({ task_id: `TASK-${index}` }),
+  }));
+
+  await Promise.all(calls.map(({ input, dispatch: contract }, index) =>
+    adapters[index % adapters.length]!.hooks["tool.execute.before"](input, { args: { prompt: taskPrompt(contract) } })));
+  await Promise.all(calls.map(({ input }, index) => {
+    const output = result({ dispatch_id: `TASK-${index}` });
+    return adapters[(index + 1) % adapters.length]!.hooks["tool.execute.after"](
+      { ...input, args: {} },
+      { title: "Task", output: resultOutput(output), metadata: {} },
+    );
+  }));
+
+  const ledger = await readFile(join(root, ".dynovo/state/tasks/ses_concurrent_dispatch.axls"), "utf8");
+  assert.equal(ledger.match(/event=dispatch_accepted/g)?.length, calls.length);
+  assert.equal(ledger.match(/event=dispatch_result_recorded/g)?.length, calls.length);
+  assert.equal(ledger.match(/status=PASS/g)?.length, calls.length * 2);
+});
+
+test("result hook reports a stable rejection when durable evidence cannot be written", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-result-write-failure-"));
+  const input = { tool: "task", sessionID: "ses_write_failure", callID: "call_write_failure" };
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  await adapter.hooks["tool.execute.before"](input, { args: { prompt: taskPrompt(dispatch()) } });
+  const ledgerPath = join(root, ".dynovo/state/tasks/ses_write_failure.axls");
+  await rm(ledgerPath);
+  await mkdir(ledgerPath);
+
+  await assert.rejects(
+    adapter.hooks["tool.execute.after"](
+      { ...input, args: {} },
+      { title: "Task", output: resultOutput(result()), metadata: {} },
+    ),
+    /DYNOVO_RESULT_REJECTED: persistence_failed/,
+  );
+});
+
+test("uncorrelated result rejection does not create an empty ledger", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-uncorrelated-result-"));
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  await assert.rejects(
+    adapter.hooks["tool.execute.after"](
+      { tool: "task", sessionID: "ses_uncorrelated", callID: "call_uncorrelated", args: {} },
+      { title: "Task", output: resultOutput(result()), metadata: {} },
+    ),
+    /DYNOVO_RESULT_REJECTED: missing_accepted_dispatch/,
+  );
+  await assert.rejects(
+    readFile(join(root, ".dynovo/state/tasks/ses_uncorrelated.axls"), "utf8"),
+    (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT",
+  );
 });
