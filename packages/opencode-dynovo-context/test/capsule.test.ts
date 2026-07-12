@@ -95,7 +95,9 @@ test("bounded rendering drops completed history before active failure", () => {
   assert.doesNotMatch(rendered, /done-29/);
 });
 
-test("capsule rejects a mandatory projection that cannot fit the configured bound", () => {
+test("capsule replaces oversized mandatory values with stable ledger references", () => {
   const impossible = { ...checkpoint, constraints: [{ id: "c001", text: "x".repeat(4_000) }] };
-  assert.throws(() => renderProtectedContextCapsule(impossible, { maxChars: 1_024 }), /exceeding configured maxChars/);
+  const rendered = renderProtectedContextCapsule(impossible, { maxChars: 2_400 });
+  assert.ok(rendered.length <= 2_400);
+  assert.match(rendered, /<STABLE_REF sha256=[a-f0-9]{64} ledger=/);
 });

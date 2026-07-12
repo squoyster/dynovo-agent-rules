@@ -1,4 +1,5 @@
 import type { CapsuleItem, CapsuleOptions, ProtectedCheckpoint } from "./types.js";
+import { createHash } from "node:crypto";
 
 const REDACTED = "<REDACTED:DYNOVO_SECRET>";
 const secretPatterns = [
@@ -107,6 +108,19 @@ export function renderProtectedContextCapsule(checkpoint: ProtectedCheckpoint, o
   if (result.length <= options.maxChars) return result;
   const activeFailures = checkpoint.failures.filter(item => item.hypothesisStatus === "active");
   result = render({ ...checkpoint, decisions: [], rejectedApproaches: [], verification: [], files: [], openQuestions: [] }, activePlan, activeFailures);
+  if (result.length <= options.maxChars) return result;
+  const reference = (input: string): string => input.length <= 160 ? input : `<STABLE_REF sha256=${createHash("sha256").update(input).digest("hex")} ledger=${checkpoint.ledgerPath}>`;
+  const referenced: ProtectedCheckpoint = {
+    ...checkpoint,
+    objective: reference(checkpoint.objective),
+    nextAction: reference(checkpoint.nextAction),
+    constraints: checkpoint.constraints.map((item) => ({ ...item, text: reference(item.text ?? "UNKNOWN") })),
+    acceptanceCriteria: checkpoint.acceptanceCriteria.map((item) => ({ ...item, text: reference(item.text ?? "UNKNOWN") })),
+    obligations: checkpoint.obligations.map((item) => ({ ...item, text: reference(item.text) })),
+    failures: activeFailures.map((item) => ({ ...item, command: reference(item.command), error: reference(item.error) })),
+    decisions: [], rejectedApproaches: [], verification: [], files: [], openQuestions: [],
+  };
+  result = render(referenced, activePlan.map((item) => ({ ...item, action: reference(item.action ?? "UNKNOWN") })), referenced.failures);
   if (result.length <= options.maxChars) return result;
   throw new Error(`Protected context requires ${result.length} chars, exceeding configured maxChars=${options.maxChars}`);
 }
