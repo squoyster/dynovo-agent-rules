@@ -19,16 +19,24 @@ and AXL-S override it.
 
 ## Install and configure
 
-Run `./bin/install-opencode-rules --with-context-plugin` for the optional plugin,
-or `--rules-only` for the rules alone. Use `--dry-run` to preview changes. The
-package is not published by this repository; use a local/file install or a
-configured package registry according to the release process.
+Run `./bin/install-opencode-rules --with-context-plugin --activate-router` for
+the tactical router harness, or `--rules-only` for definitions without changing
+the configured plugin. Use `--dry-run` to preview changes.
 
-Recommended plugin configuration is:
+`OPENCODE_CONFIG` is authoritative when set. Otherwise the installer selects
+`opencode.jsonc` or `opencode.json` under XDG config. A managed
+`dynovo-agent-rules/` directory beside that config receives copied, refreshable
+AXL, rule, agent, skill, spec, and plugin artifacts. Copying is deliberate: the
+runtime remains available when the source checkout or mounted volume is absent.
+OpenCode instructions, agent prompts, and plugin entries are migrated from
+source/remote paths to this deployed root. A legacy standalone `axl-boot.mjs`
+entry is removed because boot continuity is integrated into the main plugin.
+
+The resulting plugin configuration uses the deployed local entrypoint:
 
 ```jsonc
 {
-  "plugin": ["@tarquinen/opencode-dcp", "@dynovo/opencode-context"]
+  "plugin": ["@tarquinen/opencode-dcp", "/path/to/dynovo-agent-rules/plugin/index.js"]
 }
 ```
 

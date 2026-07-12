@@ -30,7 +30,8 @@ D092: router | domain_not_touched(T,D) -> F load(rules/{D}.axlr)
 ## Canonical files
 
 - `rules/base.axlr`: default coding and operational policy
-- `agents/orchestrator.axlr`: backlog selection, routing, and gate coordination
+- `agents/router.axlr`: tactical primary control plane for authority, state, routing, and gates
+- `agents/orchestrator.axlr`: legacy backlog coordinator superseded by `agents/router.axlr`
 - `axl/types.axlt`: notation, modal meaning, evaluation loop, shared enums
 - `axl/spec.axlr`: AXL-R grammar and authoring semantics
 - `axl/state-spec.axls`: durable state and evidence format

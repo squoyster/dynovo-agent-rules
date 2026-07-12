@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import { createOpenCodeAdapter } from "./opencode/adapter.js";
 
@@ -14,7 +17,11 @@ async function loadBootHooks(): Promise<BootHooks> {
 }
 
 const DynovoContextPlugin = async (input: { directory: string; worktree: string }, options: Record<string, unknown> = {}) => {
-  const adapter = await createOpenCodeAdapter({ directory: input.directory, worktree: input.worktree, config: options });
+  const adjacentRuleset = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const config = options.rulesetRoot === undefined && existsSync(resolve(adjacentRuleset, "AGENTS.md"))
+    ? { ...options, rulesetRoot: adjacentRuleset }
+    : options;
+  const adapter = await createOpenCodeAdapter({ directory: input.directory, worktree: input.worktree, config });
   if (options.enabled === false) return adapter.hooks;
   const boot = await loadBootHooks();
   const event: NonNullable<Hooks["event"]> = async (eventInput) => {

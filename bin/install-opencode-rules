@@ -1,26 +1,97 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-FORCE=0; DRY_RUN=0; RULES_ONLY=0; WITH_CONTEXT=0
+FORCE=0; DRY_RUN=0; RULES_ONLY=0; WITH_CONTEXT=0; ACTIVATE_ROUTER=0
 for arg in "$@"; do
   case "$arg" in
-    --force|-f) FORCE=1;; --dry-run) DRY_RUN=1;; --rules-only) RULES_ONLY=1;; --with-context-plugin) WITH_CONTEXT=1;;
-    -h|--help) echo "usage: $0 [--rules-only] [--with-context-plugin] [--dry-run] [--force]"; exit 0;;
+    --force|-f) FORCE=1;; --dry-run) DRY_RUN=1;; --rules-only) RULES_ONLY=1;; --with-context-plugin) WITH_CONTEXT=1;; --activate-router) ACTIVATE_ROUTER=1;;
+    -h|--help) echo "usage: $0 [--rules-only] [--with-context-plugin] [--activate-router] [--dry-run] [--force]"; exit 0;;
     *) echo "unknown arg: $arg" >&2; exit 2;;
   esac
 done
 [[ "$RULES_ONLY" -eq 1 || "$WITH_CONTEXT" -eq 1 ]] || RULES_ONLY=1
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ANCHOR="${SCRIPT_DIR}/../AGENTS.md"
-CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/opencode"; CONFIG=""
-for f in opencode.jsonc opencode.json; do [[ -s "$CONFIG_DIR/$f" ]] && CONFIG="$CONFIG_DIR/$f" && break; done
-[[ -n "$CONFIG" ]] || CONFIG="$CONFIG_DIR/opencode.json"
+[[ "$WITH_CONTEXT" -eq 1 ]] && RULES_ONLY=1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"; ANCHOR="${ROOT}/AGENTS.md"
+CONFIG=""
+SECONDARY_CONFIG=""
+if [[ -n "${OPENCODE_CONFIG:-}" ]]; then
+  CONFIG="$OPENCODE_CONFIG"
+  CONFIG_DIR="$(dirname "$CONFIG")"
+  SECONDARY_CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/opencode"
+  if [[ "$SECONDARY_CONFIG_DIR" != "$CONFIG_DIR" ]]; then
+    for f in opencode.jsonc opencode.json; do [[ -s "$SECONDARY_CONFIG_DIR/$f" ]] && SECONDARY_CONFIG="$SECONDARY_CONFIG_DIR/$f" && break; done
+  fi
+else
+  CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/opencode"
+  for f in opencode.jsonc opencode.json; do [[ -s "$CONFIG_DIR/$f" ]] && CONFIG="$CONFIG_DIR/$f" && break; done
+  [[ -n "$CONFIG" ]] || CONFIG="$CONFIG_DIR/opencode.json"
+fi
 command -v jq >/dev/null 2>&1 || { echo "error: jq is required" >&2; exit 1; }
 [[ -s "$ANCHOR" ]] || { echo "Missing or empty anchor: ${ANCHOR}" >&2; exit 1; }
-URL="https://raw.githubusercontent.com/squoyster/dynovo-agent-rules/main/AGENTS.md"
-PLUGIN_DIR="${SCRIPT_DIR}/../packages/opencode-dynovo-context"
-PLUGIN="${PLUGIN_DIR}/dist/index.js"
-if [[ "$DRY_RUN" -eq 1 ]]; then echo "DRY RUN: would update $CONFIG"; [[ "$RULES_ONLY" -eq 1 ]] && echo "  instruction: $URL"; [[ "$WITH_CONTEXT" -eq 1 ]] && echo "  plugin: $PLUGIN"; exit 0; fi
+DEPLOY_ROOT="${CONFIG_DIR}/dynovo-agent-rules"
+LOCAL_ANCHOR="${DEPLOY_ROOT}/AGENTS.md"
+PLUGIN_DIR="${ROOT}/packages/opencode-dynovo-context"
+SOURCE_PLUGIN="${PLUGIN_DIR}/dist/index.js"
+SOURCE_BOOT="${PLUGIN_DIR}/dist/axl-boot.mjs"
+PLUGIN="${DEPLOY_ROOT}/plugin/index.js"
+if [[ "$DRY_RUN" -eq 1 ]]; then echo "DRY RUN: would deploy AXL bundle to $DEPLOY_ROOT and update $CONFIG"; [[ "$RULES_ONLY" -eq 1 ]] && echo "  instruction: $LOCAL_ANCHOR"; [[ "$WITH_CONTEXT" -eq 1 ]] && echo "  plugin: $PLUGIN"; [[ "$ACTIVATE_ROUTER" -eq 1 ]] && echo "  default agent: router"; exit 0; fi
 if [[ ! -e "$CONFIG" ]]; then mkdir -p "$CONFIG_DIR"; printf '{\n}\n' > "$CONFIG"; fi
+deploy_bundle() {
+  local directory stage
+  mkdir -p "$CONFIG_DIR"
+  stage="$(mktemp -d "${CONFIG_DIR}/.dynovo-agent-rules.XXXXXX")"
+  cp "$ANCHOR" "$stage/AGENTS.md"
+  for directory in axl rules agents skills .specs docs; do
+    [[ -d "$ROOT/$directory" ]] || { echo "Missing deployment directory: $ROOT/$directory" >&2; exit 1; }
+    mkdir -p "$stage/$directory"
+    cp -R "$ROOT/$directory/." "$stage/$directory/"
+  done
+  if [[ "$WITH_CONTEXT" -eq 1 ]]; then
+    [[ -f "$PLUGIN_DIR/package.json" ]] || { echo "Missing local plugin package: $PLUGIN_DIR" >&2; exit 1; }
+    (cd "$PLUGIN_DIR" && npm run build >/dev/null)
+    [[ -f "$PLUGIN_DIR/dist/index.js" && -f "$PLUGIN_DIR/dist/axl-boot.mjs" ]] || { echo "Local plugin build is incomplete" >&2; exit 1; }
+    mkdir -p "$stage/plugin"
+    cp -R "$PLUGIN_DIR/dist/." "$stage/plugin/"
+  elif [[ -d "$DEPLOY_ROOT/plugin" ]]; then
+    mkdir -p "$stage/plugin"
+    cp -R "$DEPLOY_ROOT/plugin/." "$stage/plugin/"
+  fi
+  rm -rf "$DEPLOY_ROOT"
+  mv "$stage" "$DEPLOY_ROOT"
+  echo "Deployed AXL runtime bundle to $DEPLOY_ROOT"
+}
+replace_config_value() {
+  local old="$1" new="$2"
+  node -e 'const fs=require("node:fs"); const [file,oldValue,newValue]=process.argv.slice(1); const source=fs.readFileSync(file,"utf8"); fs.writeFileSync(file,source.split(oldValue).join(newValue));' "$CONFIG" "$old" "$new"
+}
+remove_config_line_value() {
+  local value="$1"
+  node -e 'const fs=require("node:fs"); const [file,value]=process.argv.slice(1); const encoded=JSON.stringify(value); const lines=fs.readFileSync(file,"utf8").split(/(?<=\n)/); fs.writeFileSync(file,lines.filter((line)=>!new RegExp(`^\\s*${encoded.replace(/[.*+?^${}()|[\\]\\]/g,"\\$&")}\\s*,?\\s*$`).test(line.trimEnd())).join(""));' "$CONFIG" "$value"
+}
+remove_config_lines_containing() {
+  local value="$1"
+  node -e 'const fs=require("node:fs"); const [file,value]=process.argv.slice(1); const lines=fs.readFileSync(file,"utf8").split(/(?<=\n)/); fs.writeFileSync(file,lines.filter((line)=>!line.includes(value)).join(""));' "$CONFIG" "$value"
+}
+activate_router() {
+  [[ -f "$DEPLOY_ROOT/agents/router.axlr" ]] || { echo "Missing deployed router definition" >&2; exit 1; }
+  node -e 'const fs=require("node:fs"); const [file,deployedRoot]=process.argv.slice(1); let source=fs.readFileSync(file,"utf8"); if (!/"default_agent"\s*:\s*"(?:orchestrator|router)"/.test(source)) throw new Error("--activate-router requires an existing orchestrator or router default_agent"); source=source.replace(/("default_agent"\s*:\s*)"orchestrator"/,`$1"router"`); if (!/^\s*"router"\s*:\s*\{/m.test(source)) source=source.replace(/^(\s*)"orchestrator"(\s*:\s*\{)/m,`$1"router"$2`); source=source.replaceAll(`${deployedRoot}/agents/orchestrator.axlr`,`${deployedRoot}/agents/router.axlr`); source=source.replace("First-pass backlog coordinator for readiness, dispatch, gates, and integration","Authoritative AXL control-plane router for authority, state, dispatch, gates, and evidence"); fs.writeFileSync(file,source);' "$CONFIG" "$DEPLOY_ROOT"
+  echo "Activated deployed router as the default agent"
+}
+cleanup_secondary_config() {
+  [[ -n "$SECONDARY_CONFIG" ]] || return 0
+  node -e 'const fs=require("node:fs"); const file=process.argv[1]; const lines=fs.readFileSync(file,"utf8").split(/(?<=\n)/); fs.writeFileSync(file,lines.filter((line)=>!(line.includes("dynovo-agent-rules")&&line.includes("packages/opencode-dynovo-context/dist/"))&&!line.includes("raw.githubusercontent.com/squoyster/dynovo-agent-rules/")).join(""));' "$SECONDARY_CONFIG"
+  if [[ "$SECONDARY_CONFIG" == *.json ]]; then jq empty "$SECONDARY_CONFIG"; fi
+  echo "Removed stale Dynovo source paths from secondary config $SECONDARY_CONFIG"
+}
+deploy_bundle
+remove_config_lines_containing "raw.githubusercontent.com/squoyster/dynovo-agent-rules/"
+grep -Fq -- "file://${SOURCE_PLUGIN}" "$CONFIG" && replace_config_value "file://${SOURCE_PLUGIN}" "$PLUGIN"
+grep -Fq -- "$SOURCE_PLUGIN" "$CONFIG" && replace_config_value "$SOURCE_PLUGIN" "$PLUGIN"
+remove_config_line_value "file://${SOURCE_BOOT}"
+remove_config_line_value "$SOURCE_BOOT"
+grep -Fq -- "${ROOT}/agents/" "$CONFIG" && replace_config_value "${ROOT}/agents/" "${DEPLOY_ROOT}/agents/"
+[[ "$ACTIVATE_ROUTER" -eq 1 ]] && activate_router
+cleanup_secondary_config
 append_existing_array() {
   local key="$1" value="$2" tmp
   tmp=$(mktemp)
@@ -31,24 +102,20 @@ append_existing_array() {
     { print }
   ' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
 }
-if [[ "$RULES_ONLY" -eq 1 ]] && ! grep -Fq -- "$URL" "$CONFIG"; then
-  if grep -Eq '^[[:space:]]*"instructions"[[:space:]]*:' "$CONFIG"; then append_existing_array instructions "$URL"; echo "Added instruction to existing array"; else
+if [[ "$RULES_ONLY" -eq 1 ]] && ! grep -Fq -- "$LOCAL_ANCHOR" "$CONFIG"; then
+  if grep -Eq '^[[:space:]]*"instructions"[[:space:]]*:' "$CONFIG"; then append_existing_array instructions "$LOCAL_ANCHOR"; echo "Added instruction to existing array"; else
   tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
-  awk -v line="  \"instructions\": [\"$URL\"]" '{ lines[NR]=$0; if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) last=NR } END { prev=0; for(i=last-1;i>=1;i--){s=lines[i];sub(/^[[:space:]]+/,"",s);if(s!=""&&s!~/^\/\//){prev=i;break}}; for(i=1;i<=NR;i++){if(i==last)print line;if(i==prev){t=lines[i];sub(/[[:space:]]+$/,"",t);if(t!~/,$/)t=t ",";print t}else print lines[i]}}' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
+  awk -v line="  \"instructions\": [\"$LOCAL_ANCHOR\"]" '{ lines[NR]=$0; if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) last=NR } END { prev=0; for(i=last-1;i>=1;i--){s=lines[i];sub(/^[[:space:]]+/,"",s);if(s!=""&&s!~/^\/\//){prev=i;break}}; for(i=1;i<=NR;i++){if(i==last)print line;if(i==prev){t=lines[i];sub(/[[:space:]]+$/,"",t);if(t!~/,$/)t=t ",";print t}else print lines[i]}}' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
   echo "Added instructions to $CONFIG"
   fi
 fi
-if [[ "$RULES_ONLY" -eq 1 ]] && [[ "$FORCE" -eq 1 ]] && grep -Fq -- "$URL" "$CONFIG"; then
+if [[ "$RULES_ONLY" -eq 1 ]] && [[ "$FORCE" -eq 1 ]] && grep -Fq -- "$LOCAL_ANCHOR" "$CONFIG"; then
   echo "Force-verified existing instruction entry in $CONFIG"
 fi
 if [[ "$WITH_CONTEXT" -eq 1 ]] && [[ "$FORCE" -eq 1 ]] && grep -Fq -- "$PLUGIN" "$CONFIG"; then
-  [[ -f "$PLUGIN_DIR/package.json" ]] || { echo "Missing local plugin package: $PLUGIN_DIR" >&2; exit 1; }
-  (cd "$PLUGIN_DIR" && npm run build >/dev/null)
-  echo "Force-refreshed local plugin build at $PLUGIN"
+  echo "Force-refreshed deployed plugin at $PLUGIN"
 fi
 if [[ "$WITH_CONTEXT" -eq 1 ]] && ! grep -Fq -- "$PLUGIN" "$CONFIG"; then
-  [[ -f "$PLUGIN_DIR/package.json" ]] || { echo "Missing local plugin package: $PLUGIN_DIR" >&2; exit 1; }
-  (cd "$PLUGIN_DIR" && npm run build >/dev/null)
   [[ -f "$PLUGIN" ]] || { echo "Local plugin build did not produce $PLUGIN" >&2; exit 1; }
   if grep -Eq '^[[:space:]]*"plugin"[[:space:]]*:' "$CONFIG"; then append_existing_array plugin "$PLUGIN"; echo "Added plugin to existing array"; else
   tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT

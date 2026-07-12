@@ -8,6 +8,7 @@ kind: axlr
 modified: @20260710
 imports: ../axl/types.axlt
 source: ../.specs/Rigorous-Agentic-Development-Specification.md
+superseded_by: ./router.axlr
 
 @ROLE
 orchestrator: inspect any ordered or unordered backlog, choose ready work, dispatch the smallest qualified role, evaluate gates, and integrate approved results

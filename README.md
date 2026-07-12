@@ -26,11 +26,12 @@ reporting success. `bin/validate-axl` mechanically checks that profile.
 - `axl/types.axlt` — shared symbols, value sigils, and status enums.
 - `axl/state-spec.axls` — durable state/ledger file specification (AXL-S).
 - `axl/patch-spec.axlp` — sparse, recoverable state-update specification (AXL-P).
-- `agents/orchestrator.axlr` — deterministic backlog selection and subagent routing.
+- `agents/router.axlr` — tactical primary control plane extracted from the agentic router specification.
+- `agents/orchestrator.axlr` — legacy backlog coordinator superseded by the router.
 - `ledgers/example-task.axls` — task-level state ledger example.
 - `ledgers/example-project.axls` — project-level state ledger example.
 - `skills/axl-humanize/SKILL.md` — on-demand, fact-preserving expansion and fidelity-assessment workflow.
-- `bin/install-opencode-rules` — idempotently wires the root anchor URL into `~/.config/opencode/opencode.json[c]`.
+- `bin/install-opencode-rules` — deploys a self-contained AXL runtime bundle and wires OpenCode to stable local paths.
 - `agents/context-orchestrator.axlr` — cheap coordinator role with bounded delegation and evidence rules.
 - `packages/opencode-dynovo-context/` — optional OpenCode native-compaction integration; see its README.
 - `bin/validate-axl` — checks AXL-R grammar, IDs, imports, and prompt budgets.
@@ -38,12 +39,20 @@ reporting success. `bin/validate-axl` mechanically checks that profile.
 ## Install
 
 ```bash
-./bin/install-opencode-rules --rules-only        # add only the AGENTS.md anchor URL
-./bin/install-opencode-rules --with-context-plugin # add rules and Dynovo plugin
-./bin/install-opencode-rules --force # re-install even if already present
+./bin/install-opencode-rules --rules-only
+./bin/install-opencode-rules --with-context-plugin
+./bin/install-opencode-rules --with-context-plugin --activate-router
+./bin/install-opencode-rules --force --with-context-plugin --activate-router
 ```
 
-Requires `jq` and `curl`.
+The installer honors `OPENCODE_CONFIG` first; otherwise it resolves
+`opencode.jsonc` or `opencode.json` under XDG config. It refreshes a managed
+`dynovo-agent-rules/` copy beside the selected config, including AXL, rules,
+agents, skills, source specs, and the built plugin. OpenCode never depends on
+this checkout or its mount path after deployment. `--activate-router` reuses
+the existing orchestrator model and permissions while making the deployed
+router prompt primary. Requires `jq`, Node.js, and the macOS-compatible system
+`awk`; the installer intentionally avoids GNU-only awk features.
 
 Validate policy changes with:
 
