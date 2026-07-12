@@ -27,6 +27,24 @@ D090: router | always -> F load(all_files_recursively)
 D091: router | routine_task(T) -> F load(axl/spec.axlr) [except: edits_axl_r_or_semantics(T)]
 D092: router | domain_not_touched(T,D) -> F load(rules/{D}.axlr)
 
+## Codex value-per-token routing
+
+These routes apply only to Codex model switching between user turns. They do not configure or constrain OpenCode providers or agents.
+
+@CODEX_MODEL_ROUTES
+gpt-5.6-luna: engineering_standards|runtime_correctness|security|lifecycle_review
+gpt-5.6-terra: specification|architecture|intent_alignment|complex_planning
+gpt-5.6-sol: integration_testing|adversarial_cases|validation|test_quality
+guidance_format: SWITCH_MODEL={exact_variant} TASK={bounded_task} REASON={value_per_token_gain} RESUME={continuation_boundary}
+
+@RULES codex_value
+CMR001: codex | start(T) -> M optimize_expected_value_per_token(T)
+CMR002: codex | current_variant_sufficient(T) -> M continue_without_model_switch_discussion(T)
+CMR003: codex | other_gpt_5_6_variant_materially_better(T,V) -> M emit_model_switch_guidance(V,T,reason,resume_boundary)
+CMR004: codex | model_switch_guidance(T) -> M name_exact_gpt_5_6_variant_task_reason_and_resume_boundary(T)
+CMR005: codex | model_switch_required_for_safe_completion(T) -> F continue_before_user_switch_or_decline(T)
+CMR006: codex | user_switches_variant(T) -> M resume_from_boundary_without_repeating_completed_work(T)
+
 ## Canonical files
 
 - `rules/base.axlr`: default coding and operational policy

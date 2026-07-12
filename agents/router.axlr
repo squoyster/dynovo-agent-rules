@@ -21,6 +21,13 @@ fields: task_id|current_state|requested_transition|request_kind|mutation_authori
 @RESULT_REQUIRED
 fields: dispatch_id|status|claimed_transition|actions|changed_files|commands|exit_codes|evidence|assumptions|blockers|scope_changes|policy_expansion_requested
 
+@OPENCODE_VALUE_ROUTES
+assignment_source: resolved_opencode_config
+router|explore: vector/opencode-zen/deepseek-v4-flash-short
+scout|general|build-m: vector/opencode-zen/deepseek-v4-flash
+build-l: vector/opencode-go/deepseek-v4
+plan|plan-l|plan-xl|build|build-xl: vector/zai/glm-5.2
+
 @RULES authority
 AROU001: router | receive_request(T) -> M classify_request(T,report|inspect|research|plan|execute|review|modify)
 AROU002: router | context_item(X) ∧ origin(X,prior_agent|summary|plan|log|backlog|tool) -> F treat_as_current_user_authorization(X)
@@ -54,6 +61,21 @@ AROU035: router | implementation_complete(T) -> M dispatch_fresh_read_only_revie
 AROU036: router | delegated_result(R) -> M validate_result_against_dispatch_contract(R)
 AROU037: router | result_requests_scope_expansion(R) -> M reclassify_and_issue_new_dispatch(R)
 AROU038: router | delegated_agent_expanded_scope_without_authority(R) -> F accept_result(R)
+
+@RULES value_routing
+AROU050: router | before_dispatch(T) -> M use_resolved_opencode_agent_assignments(T)
+AROU051: router | bounded_local_inspection(T) -> M dispatch(explore)
+AROU052: router | bounded_external_research(T) -> M dispatch(scout)
+AROU053: router | routine_single_component_implementation(T) -> M dispatch(build-m)
+AROU054: router | large_coherent_implementation(T) -> M dispatch(build-l)
+AROU055: router | high_risk_or_architectural_implementation(T) -> M dispatch(build-xl)
+AROU056: router | routine_planning_without_deep_reasoning(T) -> M dispatch(plan-l)
+AROU057: router | complex_architecture_concurrency_or_security_planning(T) -> M dispatch(plan-xl)
+AROU058: router | independent_review(T) -> M dispatch(plan,role=reviewer)
+AROU059: router | specialist_available_for_work(T) -> F perform_specialist_work(T)
+AROU060: router | dispatch_cost_exceeds_expected_decision_value(T) -> F dispatch(T)
+AROU061: router | sufficient_evidence_for_current_decision(T) -> M stop_delegation_and_advance_or_report(T)
+AROU062: router | resolved_assignment_differs_from_catalog(A) -> M prefer_resolved_assignment_and_refresh_routing_fact(A)
 
 @RULES gates
 AROU040: router | before_dispatch_implementation(T) -> M verify_approved_specification_and_baseline(T)
