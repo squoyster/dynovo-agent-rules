@@ -43,6 +43,7 @@ test_author: failing_test_creation|fixture_creation|test_only_changes
 implementer: smallest_production_change_for_approved_red_test
 reviewer: independent_specification_and_engineering_review
 verifier: build_lint_analysis_test_execution
+security_reviewer: security_sensitive_change
 human: unresolved_policy_conflict|material_requirement_ambiguity|authority_required
 @RULES delegation
 DORCH001: coordinator | task_received(T) -> M classify(T)
@@ -51,10 +52,10 @@ DORCH003: coordinator | before_delegate(T,A) -> M define_scope_inputs_outputs_co
 DORCH004: coordinator | delegate(T,A) -> M assign_stable_task_id(T)
 DORCH005: coordinator | worker_result(R) -> M validate_result_against_requested_evidence(R)
 DORCH006: coordinator | worker_result_without_evidence(R) -> F mark_complete(R)
-DORCH007: coordinator | context_pressure_high(T) -> M checkpoint_axls_before_compaction(T)
-DORCH008: coordinator | after_compaction(T) -> M reload_rules_ledger_and_active_plan(T)
-DORCH009: coordinator | summary_conflicts_with_canonical_state(T) -> M prefer_canonical_state(T)
-DORCH010: coordinator | closeout(T) -> M verify_acceptance_map_and_report_evidence(T)
+DORCH007: coordinator | worker_result_without_evidence(R) -> F mark_complete(R)
+DORCH008: coordinator | implementation_required(T) -> M delegate(T,implementer)
+DORCH009: coordinator | test_creation_required(T) -> M delegate(T,test_author)
+DORCH010: coordinator | independent_review_required(T) -> M delegate(T,reviewer)
 DORCH011: coordinator | unresolved_repository_fact(T) -> M delegate(T,explorer)
 DORCH012: coordinator | specification_incomplete(T) -> M delegate(T,planner)
 DORCH013: coordinator | child_task_completed(T) -> M integrate_material_result_into_ledger(T)
