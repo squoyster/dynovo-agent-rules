@@ -9,6 +9,7 @@ import { renderDynovoCompactionPrompt } from "../compaction/prompt.js";
 import type { ProtectedCheckpoint } from "../compaction/types.js";
 import { resolveConfig, type DynovoContextConfig } from "../config.js";
 import { resolveRole } from "../orchestration/roles.js";
+import { dispatchRejectionMessage, parseDispatchEnvelope, validateDispatch } from "../orchestration/dispatch.js";
 import { resolveActiveObligations } from "../rule-resolver.js";
 import { atomicWrite, SessionRegistry, withLock } from "../session-registry.js";
 
@@ -57,6 +58,7 @@ export class OpenCodeAdapter {
   readonly hooks: {
     "experimental.session.compacting": (input: { sessionID: string }, output: CompactionOutput) => Promise<void>;
     "chat.message": (input: { sessionID: string }, output: ChatOutput) => Promise<void>;
+    "tool.execute.before": (input: { tool: string; sessionID: string; callID: string }, output: { args: Record<string, unknown> }) => Promise<void>;
     event: (input: { event: Event }) => Promise<void>;
   };
   private readonly prepared = new Map<string, PreparedCheckpoint>();
@@ -72,7 +74,7 @@ export class OpenCodeAdapter {
     if (this.config.dcpCoexistence && options.installedPlugins?.some((plugin) => plugin.includes("opencode-dcp"))) {
       this.options.onDiagnostic?.("Dynovo context plugin: DCP detected; selective pruning remains delegated to DCP.");
     }
-    this.hooks = { "experimental.session.compacting": this.compacting.bind(this), "chat.message": this.chatMessage.bind(this), event: this.event.bind(this) };
+    this.hooks = { "experimental.session.compacting": this.compacting.bind(this), "chat.message": this.chatMessage.bind(this), "tool.execute.before": this.beforeToolExecute.bind(this), event: this.event.bind(this) };
   }
 
   pendingRecovery(sessionID: string): RecoveryState | undefined { return this.recovery.get(sessionID); }
@@ -192,6 +194,14 @@ export class OpenCodeAdapter {
     recovery.injected = true;
     const state = await this.registry.get(input.sessionID);
     if (state) await this.registry.put({ ...state, recoveryDelivered: true });
+  }
+
+  private async beforeToolExecute(input: { tool: string }, output: { args: Record<string, unknown> }): Promise<void> {
+    if (!this.config.enabled || !this.config.orchestrator.enabled || input.tool !== "task") return;
+    const parsed = parseDispatchEnvelope(output.args.prompt);
+    if (!parsed.ok) throw new Error(dispatchRejectionMessage(parsed.reason));
+    const violation = validateDispatch(parsed.dispatch)[0];
+    if (violation) throw new Error(dispatchRejectionMessage(violation.code));
   }
 }
 

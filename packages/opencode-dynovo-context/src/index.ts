@@ -37,3 +37,4 @@ export default DynovoContextPlugin;
 
 export { createOpenCodeAdapter } from "./opencode/adapter.js";
 export { parseAxls, serializeAxls } from "./axls/index.js";
+export { dispatchEnvelopeMarker, parseDispatchEnvelope, validateDispatch, type DispatchContract, type DispatchParseResult, type DispatchViolation } from "./orchestration/dispatch.js";

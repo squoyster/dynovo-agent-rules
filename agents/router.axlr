@@ -18,6 +18,10 @@ states: INTAKE|DISCOVERY|SPECIFICATION|BASELINE_READY|RED_REQUIRED|RED_ESTABLISH
 @DISPATCH_REQUIRED
 fields: task_id|current_state|requested_transition|request_kind|mutation_authorized|agent|role|model_tier|policy_bundle|task|acceptance_criteria|allowed_actions|forbidden_actions|required_evidence|completion_boundary|assumptions|unresolved
 
+# Every native OpenCode task prompt begins with this exact line, followed by one
+# JSON object carrying @DISPATCH_REQUIRED fields, then a blank line and task prose.
+# DYNOVO_DISPATCH_V1
+
 @RESULT_REQUIRED
 fields: dispatch_id|status|claimed_transition|actions|changed_files|commands|exit_codes|evidence|assumptions|blockers|scope_changes|policy_expansion_requested
 
@@ -76,6 +80,8 @@ AROU059: router | specialist_available_for_work(T) -> F perform_specialist_work(
 AROU060: router | dispatch_cost_exceeds_expected_decision_value(T) -> F dispatch(T)
 AROU061: router | sufficient_evidence_for_current_decision(T) -> M stop_delegation_and_advance_or_report(T)
 AROU062: router | resolved_assignment_differs_from_catalog(A) -> M prefer_resolved_assignment_and_refresh_routing_fact(A)
+AROU063: router | before_native_task_dispatch(D) -> M encode_dispatch_header(D,DYNOVO_DISPATCH_V1)
+AROU064: router | native_task_dispatch(D) ∧ ¬valid_dispatch_header(D) -> F invoke_task(D)
 
 @RULES gates
 AROU040: router | before_dispatch_implementation(T) -> M verify_approved_specification_and_baseline(T)

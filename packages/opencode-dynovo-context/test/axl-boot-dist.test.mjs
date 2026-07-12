@@ -29,3 +29,14 @@ test("built plugin verifies retained AXL continuity through OpenCode hooks", asy
 
   assert.match(retained.system[0] ?? "", /continuity_status="retained"/);
 });
+
+test("built plugin blocks native task calls without a dispatch envelope", async () => {
+  const hooks = await DynovoContextPlugin({ directory: "/tmp", worktree: "/tmp" });
+  await assert.rejects(
+    hooks["tool.execute.before"](
+      { tool: "task", sessionID: "ses_dist_dispatch", callID: "call_dist" },
+      { args: { prompt: "uncontracted task" } },
+    ),
+    /DYNOVO_DISPATCH_REJECTED: missing_dispatch_envelope/,
+  );
+});
