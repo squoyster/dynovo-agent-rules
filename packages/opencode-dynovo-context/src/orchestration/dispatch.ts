@@ -98,8 +98,15 @@ export function parseResultEnvelope(output: unknown): ResultParseResult {
   if (typeof output !== "string") {
     return { ok: false, reason: "missing_result_envelope" };
   }
-  const wrapped = output.match(/^<task\b[^>]*>\s*<task_result>\s*([\s\S]*?)\s*<\/task_result>\s*<\/task>\s*$/);
-  const resultOutput = wrapped?.[1] ?? output;
+  const wrapped = output.match(/^<task\b([^>]*)>\s*<task_result>\s*([\s\S]*?)\s*<\/task_result>\s*<\/task>\s*$/);
+  const attributes = wrapped?.[1] ?? "";
+  const wrappedOutput = wrapped?.[2];
+  const states = [...attributes.matchAll(/(?:^|\s)state="([^"]*)"/g)].map((match) => match[1]);
+  const validWrapper = wrappedOutput !== undefined
+    && states.length === 1
+    && states[0] === "completed"
+    && !/<\/?(?:task|task_result)\b/.test(wrappedOutput);
+  const resultOutput = validWrapper ? wrappedOutput : output;
   if (!resultOutput.startsWith(`${resultEnvelopeMarker}\n`)) {
     return { ok: false, reason: "missing_result_envelope" };
   }

@@ -125,6 +125,17 @@ test("result envelope accepts the native OpenCode task result transport wrapper"
   assert.deepEqual(parseResultEnvelope(`prefix\n${wrapped}`), { ok: false, reason: "missing_result_envelope" });
 });
 
+test("result envelope rejects incomplete and ambiguous native task wrappers", () => {
+  const failed = `<task id="ses_test" state="error">\n<task_result>\n${resultOutput(result())}\n</task_result>\n</task>`;
+  const conflictingState = `<task id="ses_test" state="error" state="completed">\n<task_result>\n${resultOutput(result())}\n</task_result>\n</task>`;
+  const duplicate = `<task id="ses_test" state="completed">\n<task_result>\n${resultOutput(result())}\n</task_result>\n<task_result>\n${resultOutput(result())}\n</task_result>\n</task>`;
+  const nested = `<task id="ses_test" state="completed">\n<task_result>\n<task id="nested" state="completed">\n<task_result>\n${resultOutput(result())}\n</task_result>\n</task>\n</task_result>\n</task>`;
+
+  for (const output of [failed, conflictingState, duplicate, nested]) {
+    assert.deepEqual(parseResultEnvelope(output), { ok: false, reason: "missing_result_envelope" });
+  }
+});
+
 test("result validator rejects an incomplete result contract before correlation", () => {
   assert.deepEqual(validateResult({} as never, dispatch()).map((item) => item.code), [
     "missing_dispatch_id",
@@ -247,6 +258,33 @@ test("task after-hook correlates and validates one result per accepted dispatch"
   const ledger = await readFile(join(root, ".dynovo/state/tasks/ses_result.axls"), "utf8");
   assert.match(ledger, /status=REJECTED/);
   assert.match(ledger, /validation=missing_result_envelope/);
+});
+
+test("task result cannot borrow an accepted call from another session or call ID", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-result-correlation-"));
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  const accepted = { tool: "task", sessionID: "ses_owner", callID: "call_owner" };
+  const args = { prompt: taskPrompt(dispatch()) };
+  await bindRouter(adapter, accepted.sessionID);
+  await adapter.hooks["tool.execute.before"](accepted, { args });
+
+  for (const spoofed of [
+    { ...accepted, sessionID: "ses_other" },
+    { ...accepted, callID: "call_other" },
+  ]) {
+    await assert.rejects(
+      adapter.hooks["tool.execute.after"](
+        { ...spoofed, args },
+        { title: "Task", output: resultOutput(result()), metadata: {} },
+      ),
+      /DYNOVO_RESULT_REJECTED: missing_accepted_dispatch/,
+    );
+  }
+
+  await adapter.hooks["tool.execute.after"](
+    { ...accepted, args },
+    { title: "Task", output: resultOutput(result()), metadata: {} },
+  );
 });
 
 test("fresh adapter recovers a pending dispatch from the AXL-S ledger", async () => {
@@ -442,4 +480,23 @@ test("unbound sessions cannot advance workflow state", async () => {
     adapter.hooks["tool.execute.after"]({ ...input, args }, { title: "Task", output: resultOutput(result()), metadata: {} }),
     /DYNOVO_TRANSITION_REJECTED: unauthorized_router/,
   );
+});
+
+test("router authority lost after dispatch prevents the result transition", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-revoked-router-"));
+  const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  const input = { tool: "task", sessionID: "ses_revoked_router", callID: "call_revoked_router" };
+  const args = { prompt: taskPrompt(dispatch()) };
+  await bindRouter(adapter, input.sessionID);
+  await adapter.hooks["tool.execute.before"](input, { args });
+  await adapter.hooks.event({ event: { type: "message.updated", properties: { info: { sessionID: input.sessionID, role: "assistant", agent: "explore" } } } as never });
+
+  await assert.rejects(
+    adapter.hooks["tool.execute.after"]({ ...input, args }, { title: "Task", output: resultOutput(result()), metadata: {} }),
+    /DYNOVO_TRANSITION_REJECTED: unauthorized_router/,
+  );
+
+  const ledger = await readFile(join(root, ".dynovo/state/tasks/ses_revoked_router.axls"), "utf8");
+  assert.match(ledger, /status=PASS/);
+  assert.doesNotMatch(ledger, /@TRANSITIONS/);
 });
