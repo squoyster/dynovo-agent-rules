@@ -12,6 +12,7 @@ export interface AxlsBlock {
 export class AxlsDocument {
   readonly blocks = new Map<string, AxlsBlock>();
   private readonly source: string;
+  private readonly appended: Array<{ blockName: string; raw: string }> = [];
 
   constructor(source: string) {
     this.source = source;
@@ -36,7 +37,20 @@ export class AxlsDocument {
   }
 
   serialize(): string {
-    return this.source;
+    if (!this.appended.length) return this.source;
+    const extension = this.appended.map(({ blockName, raw }) => `@${blockName}\n${raw}`).join("\n\n");
+    return `${this.source.replace(/\n?$/, "\n")}\n${extension}\n`;
+  }
+
+  appendRecord(blockName: string, id: string, fields: Record<string, string>): void {
+    const block = this.blocks.get(blockName);
+    if (!block) throw new Error(`Unknown AXL-S block: ${blockName}`);
+    const pairs = Object.entries(fields)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${key}=${/\s/.test(item) ? JSON.stringify(item) : item}`);
+    const raw = [id, ...pairs].join(" ");
+    block.records.push({ id, fields: { ...fields }, raw });
+    this.appended.push({ blockName, raw });
   }
 }
 
@@ -63,6 +77,11 @@ export function parseAxls(source: string): AxlsDocument {
       continue;
     }
     if (!current || !line || line.startsWith("#") || /^\s/.test(line)) continue;
+    const field = /^([a-z][a-z0-9_]*):\s*(.*)$/.exec(line);
+    if (field) {
+      current.records.push({ id: field[1]!, fields: { value: field[2] ?? "" }, raw: line });
+      continue;
+    }
     const record = /^([^\s]+)(?:\s+(.*))?$/.exec(line);
     if (!record) continue;
     current.records.push({ id: record[1]!, fields: parseFields(record[2] ?? ""), raw: line });

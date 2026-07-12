@@ -108,5 +108,8 @@ export function renderProtectedContextCapsule(checkpoint: ProtectedCheckpoint, o
   const activeFailures = checkpoint.failures.filter(item => item.hypothesisStatus === "active");
   result = render({ ...checkpoint, decisions: [], rejectedApproaches: [], verification: [], files: [], openQuestions: [] }, activePlan, activeFailures);
   if (result.length <= options.maxChars) return result;
-  return `${result.slice(0, Math.max(0, options.maxChars - 37))}\n[TRUNCATED: stable references retained]`;
+  // Do not cut through required authority, role, constraint, or failure records.
+  // If these records alone exceed a caller's limit, preserving canonical recovery
+  // state is safer than emitting a syntactically plausible partial capsule.
+  return result;
 }

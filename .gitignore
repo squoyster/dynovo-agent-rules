@@ -31,3 +31,6 @@ coverage.*
 # Node package build artifacts
 node_modules/
 dist/
+
+# Dynovo Context Plugin local runtime state
+.dynovo/

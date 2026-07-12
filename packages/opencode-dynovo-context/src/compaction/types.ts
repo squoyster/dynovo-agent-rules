@@ -1,10 +1,10 @@
 export interface CapsuleItem {
   id: string;
-  text?: string;
-  status?: string;
-  evidence?: string;
-  owner?: string;
-  action?: string;
+  text?: string | undefined;
+  status?: string | undefined;
+  evidence?: string | undefined;
+  owner?: string | undefined;
+  action?: string | undefined;
 }
 
 export interface ProtectedFailure {
@@ -21,7 +21,7 @@ export interface ProtectedCheckpoint {
   checkpointID: string;
   createdAt: string;
   workspaceRoot: string;
-  repository?: string;
+  repository?: string | undefined;
   rulesetRoot: string;
   rulesetCommit: string;
   baseRules: string;
@@ -29,7 +29,7 @@ export interface ProtectedCheckpoint {
   ledgerPath: string;
   ledgerVersion: string;
   activeRole: string;
-  activeAgentID?: string;
+  activeAgentID?: string | undefined;
   delegationParent: string;
   delegatedTask: string;
   allowedActions: string[];
