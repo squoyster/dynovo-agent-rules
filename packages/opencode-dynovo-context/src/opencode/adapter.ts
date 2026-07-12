@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import type { Event } from "@opencode-ai/sdk";
 import { minimalLedgerProjection, projectLedger, type LedgerProjection } from "../axls/projector.js";
 import { renderProtectedContextCapsule } from "../compaction/capsule.js";
 import { redactSecrets } from "../compaction/capsule.js";
@@ -12,7 +13,6 @@ import { resolveActiveObligations } from "../rule-resolver.js";
 import { atomicWrite, SessionRegistry, withLock } from "../session-registry.js";
 
 type CompactionOutput = { context: string[]; prompt?: string };
-type CompactionEvent = { type: string; properties?: { sessionID?: string } };
 type ChatOutput = { parts: unknown[] };
 
 export interface AdapterOptions {
@@ -57,7 +57,7 @@ export class OpenCodeAdapter {
   readonly hooks: {
     "experimental.session.compacting": (input: { sessionID: string }, output: CompactionOutput) => Promise<void>;
     "chat.message": (input: { sessionID: string }, output: ChatOutput) => Promise<void>;
-    event: (input: { event: CompactionEvent }) => Promise<void>;
+    event: (input: { event: Event }) => Promise<void>;
   };
   private readonly prepared = new Map<string, PreparedCheckpoint>();
   private readonly recovery = new Map<string, RecoveryState>();
@@ -164,7 +164,7 @@ export class OpenCodeAdapter {
     }
   }
 
-  private async event(input: { event: CompactionEvent }): Promise<void> {
+  private async event(input: { event: Event }): Promise<void> {
     if (input.event.type !== "session.compacted") return;
     const sessionID = input.event.properties?.sessionID;
     if (!sessionID) return;

@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
 
@@ -37,4 +38,11 @@ test("installer adds missing arrays with portable awk", async () => {
   const result = await readFile(configPath, "utf8");
   assert.match(result, /"instructions": \[/);
   assert.match(result, /"plugin": \[/);
+
+  const config = JSON.parse(result) as { plugin: string[] };
+  const installedPlugin = await import(pathToFileURL(config.plugin[0]!).href) as {
+    default: (input: { directory: string; worktree: string }) => Promise<Record<string, unknown>>;
+  };
+  const hooks = await installedPlugin.default({ directory: home, worktree: home });
+  assert.equal(typeof hooks["experimental.chat.system.transform"], "function");
 });

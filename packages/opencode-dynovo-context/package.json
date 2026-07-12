@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
-    "test": "tsx --test test/*.test.ts",
+    "pretest": "npm run build",
+    "test": "tsx --test test/*.test.*",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {

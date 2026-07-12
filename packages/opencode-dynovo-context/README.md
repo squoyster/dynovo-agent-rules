@@ -21,6 +21,18 @@ prompt through `experimental.session.compacting`. A successful
 instruction. Canonical AXL-R, AXL-S, repository, Git, and executable evidence
 always override the generated summary.
 
+The plugin also injects an AXL continuity instruction through
+`experimental.chat.system.transform`. Each session receives a random canary.
+The companion message transform checks retained assistant text for that exact
+completion reference: when present, the next request receives a compact
+continuation instruction; when absent after compaction, reconstruction, or
+context loss, the next request receives the full AXL disclosure bootstrap.
+Session deletion and plugin disposal release the in-memory continuity state.
+
+Setting `enabled` to `false` disables both context checkpointing and AXL boot
+hooks. The package test suite builds and imports `dist/index.js` so continuity
+behavior is verified through the artifact that OpenCode and the installer load.
+
 Local runtime state lives under `.dynovo/` and is ignored by default. Teams may
 commit deliberately selected task ledgers. No network or LLM call occurs during
 compaction; experimental OpenCode hook names are isolated in the adapter.

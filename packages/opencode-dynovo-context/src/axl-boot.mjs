@@ -10,8 +10,32 @@ const newCanary = () =>
 
 export default async () => {
   const sessions = new Map();
+  const continuity = new Map();
 
   return {
+    dispose: async () => {
+      sessions.clear();
+      continuity.clear();
+    },
+    event: async ({ event }) => {
+      if (event.type !== "session.deleted") return;
+      const sessionID = event.properties.info.id;
+      sessions.delete(sessionID);
+      continuity.delete(sessionID);
+    },
+    "experimental.chat.messages.transform": async (_input, output) => {
+      const sessionID = output.messages[0]?.info.sessionID;
+      const canary = sessionID ? sessions.get(sessionID) : undefined;
+      if (!sessionID || !canary) return;
+
+      const completionRef = `^AXL_BOOTSTRAP_COMPLETE:${canary}`;
+      const retained = output.messages.some(({ info, parts }) =>
+        info.role === "assistant" && parts.some((part) =>
+          part.type === "text" && part.text?.includes(completionRef),
+        ),
+      );
+      continuity.set(sessionID, retained);
+    },
     "experimental.chat.system.transform": async (input, output) => {
       output.system ??= [];
 
@@ -32,6 +56,16 @@ export default async () => {
 
       const completionRef =
         `^AXL_BOOTSTRAP_COMPLETE:${canary}`;
+
+      if (sessionID && continuity.get(sessionID)) {
+        output.system.push(`
+<AXL_CONTINUITY canary="${canary}" continuity_status="retained">
+The plugin verified ${completionRef} in retained assistant context.
+Continue applying the retained AXL rules normally.
+</AXL_CONTINUITY>
+`);
+        return;
+      }
 
       output.system.push(`
 YOU MUST (M) EXECUTE THE FOLLOWING BEFORE ANY OTHER ACTION:
