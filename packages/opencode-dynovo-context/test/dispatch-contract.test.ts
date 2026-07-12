@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -210,7 +210,7 @@ test("task after-hook correlates and validates one result per accepted dispatch"
   const adapter = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
   const before = adapter.hooks["tool.execute.before"];
   const after = adapter.hooks["tool.execute.after"];
-  const input = { tool: "task", sessionID: "ses_result", callID: "call_result" };
+  const input = { tool: "task", sessionID: "ses_result", callID: "call_result_1" };
   const args = { prompt: taskPrompt(dispatch()) };
 
   await before(input, { args });
@@ -219,16 +219,46 @@ test("task after-hook correlates and validates one result per accepted dispatch"
     /DYNOVO_RESULT_REJECTED: missing_result_envelope/,
   );
 
-  await before(input, { args });
+  const secondInput = { ...input, callID: "call_result_2" };
+  await before(secondInput, { args });
   await assert.rejects(
-    after({ ...input, args }, { title: "Task", output: resultOutput(result({ dispatch_id: "TASK-other" })), metadata: {} }),
+    after({ ...secondInput, args }, { title: "Task", output: resultOutput(result({ dispatch_id: "TASK-other" })), metadata: {} }),
     /DYNOVO_RESULT_REJECTED: dispatch_id_mismatch/,
   );
 
-  await before(input, { args });
-  await after({ ...input, args }, { title: "Task", output: resultOutput(result()), metadata: {} });
+  const thirdInput = { ...input, callID: "call_result_3" };
+  await before(thirdInput, { args });
+  await after({ ...thirdInput, args }, { title: "Task", output: resultOutput(result()), metadata: {} });
   await assert.rejects(
-    after({ ...input, args }, { title: "Task", output: resultOutput(result()), metadata: {} }),
+    after({ ...thirdInput, args }, { title: "Task", output: resultOutput(result()), metadata: {} }),
     /DYNOVO_RESULT_REJECTED: missing_accepted_dispatch/,
   );
+  const ledger = await readFile(join(root, ".dynovo/state/tasks/ses_result.axls"), "utf8");
+  assert.match(ledger, /status=REJECTED/);
+  assert.match(ledger, /validation=missing_result_envelope/);
+});
+
+test("fresh adapter recovers a pending dispatch from the AXL-S ledger", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-result-restart-"));
+  const input = { tool: "task", sessionID: "ses_restart", callID: "call_restart" };
+  const args = { prompt: taskPrompt(dispatch()) };
+  const first = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  await first.hooks["tool.execute.before"](input, { args });
+
+  const restarted = await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root });
+  await restarted.hooks["tool.execute.after"](
+    { ...input, args },
+    { title: "Task", output: resultOutput(result()), metadata: {} },
+  );
+
+  const ledger = await readFile(
+    join(root, ".dynovo/state/tasks/ses_restart.axls"),
+    "utf8",
+  );
+  assert.match(ledger, /@DELEGATIONS/);
+  assert.match(ledger, /status=pending/);
+  assert.match(ledger, /@EVIDENCE/);
+  assert.match(ledger, /status=PASS/);
+  assert.match(ledger, /@LOG/);
+  assert.match(ledger, /dispatch_result_recorded/);
 });

@@ -9,7 +9,7 @@ import { renderDynovoCompactionPrompt } from "../compaction/prompt.js";
 import type { ProtectedCheckpoint } from "../compaction/types.js";
 import { resolveConfig, type DynovoContextConfig } from "../config.js";
 import { resolveRole } from "../orchestration/roles.js";
-import { dispatchRejectionMessage, parseDispatchEnvelope, parseResultEnvelope, resultRejectionMessage, validateDispatch, validateResult, type DispatchContract } from "../orchestration/dispatch.js";
+import { dispatchRejectionMessage, parseDispatchEnvelope, parseResultEnvelope, resultRejectionMessage, validateDispatch, validateResult, type DispatchContract, type DispatchResult } from "../orchestration/dispatch.js";
 import { resolveActiveObligations } from "../rule-resolver.js";
 import { atomicWrite, SessionRegistry, withLock } from "../session-registry.js";
 
@@ -28,6 +28,7 @@ export interface AdapterOptions {
 
 interface PreparedCheckpoint { id: string; capsule: string; createdAt: string; ledgerPath: string; checkpointPath: string }
 interface RecoveryState { deliveries: number; instruction: string; injected: boolean }
+const MAX_PENDING_DISPATCHES = 256;
 
 const recoveryInstruction = `Dynovo context recovery:
 1. Reload the canonical root AGENTS.md.
@@ -52,6 +53,16 @@ function workspacePath(root: string, candidate: string): string {
 
 function reconstructedLedger(): string {
   return "@META\nid: reconstructed\nv: UNKNOWN\nkind: axls\n\n@STATE\nobjective: UNKNOWN\nstatus: TODO\nrisk: LOW\ncurrent_focus: UNKNOWN\ncurrent_gate: NONE\nnext_action: Reload canonical state before acting\n\n@PLAN\n\n@LOG\n";
+}
+
+function dispatchStorageKey(sessionID: string, callID: string): string {
+  return createHash("sha256").update(`${sessionID}\0${callID}`).digest("hex").slice(0, 20);
+}
+
+function jsonArray(value: string | undefined): unknown[] {
+  if (!value) return [];
+  try { const parsed: unknown = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; }
+  catch { return []; }
 }
 
 export class OpenCodeAdapter {
@@ -198,25 +209,87 @@ export class OpenCodeAdapter {
     if (state) await this.registry.put({ ...state, recoveryDelivered: true });
   }
 
+  private dispatchStateLock(): string {
+    return join(this.options.worktree, this.config.stateDirectory, "state", "dispatches");
+  }
+
+  private async persistDispatch(sessionID: string, callID: string, dispatch: DispatchContract): Promise<void> {
+    await withLock(this.dispatchStateLock(), async () => {
+      const ledger = await this.loadLedger(sessionID);
+      const delegations = ledger.projection.document.blocks.get("DELEGATIONS")?.records ?? [];
+      const evidence = ledger.projection.document.blocks.get("EVIDENCE")?.records ?? [];
+      if (evidence.some((record) => record.fields.session_id === sessionID && record.fields.call_id === callID)) throw new Error("dispatch already recorded");
+      const id = `dispatch_${dispatchStorageKey(sessionID, callID)}`;
+      if (!delegations.some((record) => record.id === id)) {
+        ledger.projection.document.appendRecord("DELEGATIONS", id, {
+          dispatch_id: dispatch.task_id, session_id: sessionID, call_id: callID, status: "pending", agent: dispatch.agent, role: dispatch.role,
+          current_state: dispatch.current_state, requested_transition: dispatch.requested_transition, mutation_authorized: String(dispatch.mutation_authorized),
+          allowed_actions: JSON.stringify(dispatch.allowed_actions), required_evidence: JSON.stringify(dispatch.required_evidence), created_at: new Date().toISOString(),
+        });
+        ledger.projection.document.appendRecord("LOG", `${id}_accepted`, { event: "dispatch_accepted", dispatch_id: dispatch.task_id, session_id: sessionID, call_id: callID, status: "pending" });
+        await atomicWrite(ledger.path, ledger.projection.document.serialize());
+      }
+    });
+  }
+
+  private async recoverDispatch(sessionID: string, callID: string): Promise<DispatchContract | undefined> {
+    const ledger = await this.loadLedger(sessionID);
+    const evidence = ledger.projection.document.blocks.get("EVIDENCE")?.records ?? [];
+    if (evidence.some((record) => record.fields.session_id === sessionID && record.fields.call_id === callID)) return undefined;
+    const id = `dispatch_${dispatchStorageKey(sessionID, callID)}`;
+    const record = (ledger.projection.document.blocks.get("DELEGATIONS")?.records ?? []).find((item) => item.id === id && item.fields.status === "pending");
+    if (!record) return undefined;
+    return {
+      task_id: record.fields.dispatch_id ?? "UNKNOWN", current_state: record.fields.current_state ?? "UNKNOWN", requested_transition: record.fields.requested_transition ?? "UNKNOWN",
+      request_kind: "execute", mutation_authorized: record.fields.mutation_authorized === "true", agent: record.fields.agent ?? "general", role: record.fields.role ?? "UNKNOWN",
+      model_tier: "recovered", policy_bundle: ["axl/types.axlt", "rules/base.axlr"], task: "Recovered dispatch", acceptance_criteria: ["Recovered result contract"],
+      allowed_actions: jsonArray(record.fields.allowed_actions).filter((item): item is string => typeof item === "string"), forbidden_actions: ["expand recovered scope"],
+      required_evidence: jsonArray(record.fields.required_evidence).filter((item): item is string => typeof item === "string"), completion_boundary: "Return the result contract.", assumptions: [], unresolved: [],
+    };
+  }
+
+  private async persistResult(sessionID: string, callID: string, result?: DispatchResult, rejection?: string): Promise<void> {
+    await withLock(this.dispatchStateLock(), async () => {
+      const ledger = await this.loadLedger(sessionID);
+      const id = `result_${dispatchStorageKey(sessionID, callID)}`;
+      const fields: Record<string, string> = result ? {
+        dispatch_id: result.dispatch_id, session_id: sessionID, call_id: callID, status: result.status, claimed_transition: result.claimed_transition,
+        actions: JSON.stringify(result.actions), changed_files: JSON.stringify(result.changed_files), commands: JSON.stringify(result.commands), exit_codes: JSON.stringify(result.exit_codes),
+        evidence: JSON.stringify(result.evidence), blockers: JSON.stringify(result.blockers), scope_changes: JSON.stringify(result.scope_changes), policy_expansion_requested: JSON.stringify(result.policy_expansion_requested), validation: "passed", recorded_at: new Date().toISOString(),
+      } : { session_id: sessionID, call_id: callID, status: "REJECTED", validation: rejection ?? "UNKNOWN", recorded_at: new Date().toISOString() };
+      ledger.projection.document.appendRecord("EVIDENCE", id, fields);
+      ledger.projection.document.appendRecord("LOG", `${id}_recorded`, { event: "dispatch_result_recorded", session_id: sessionID, call_id: callID, status: result?.status ?? "REJECTED", validation: result ? "passed" : rejection ?? "UNKNOWN" });
+      await atomicWrite(ledger.path, ledger.projection.document.serialize());
+    });
+  }
+
   private async beforeToolExecute(input: { tool: string; sessionID: string; callID: string }, output: { args: Record<string, unknown> }): Promise<void> {
     if (!this.config.enabled || !this.config.orchestrator.enabled || input.tool !== "task") return;
     const parsed = parseDispatchEnvelope(output.args.prompt);
     if (!parsed.ok) throw new Error(dispatchRejectionMessage(parsed.reason));
     const violation = validateDispatch(parsed.dispatch)[0];
     if (violation) throw new Error(dispatchRejectionMessage(violation.code));
+    try { await this.persistDispatch(input.sessionID, input.callID, parsed.dispatch); }
+    catch (error) { throw new Error(dispatchRejectionMessage(error instanceof Error && error.message === "dispatch already recorded" ? "duplicate_dispatch" : "persistence_failed")); }
+    if (this.acceptedDispatches.size >= MAX_PENDING_DISPATCHES) {
+      const oldest = this.acceptedDispatches.keys().next().value;
+      if (oldest) this.acceptedDispatches.delete(oldest);
+      this.options.onDiagnostic?.("Dynovo context plugin: evicted oldest pending dispatch after reaching the in-memory bound.");
+    }
     this.acceptedDispatches.set(`${input.sessionID}\0${input.callID}`, parsed.dispatch);
   }
 
   private async afterToolExecute(input: { tool: string; sessionID: string; callID: string }, output: { output: string }): Promise<void> {
     if (!this.config.enabled || !this.config.orchestrator.enabled || input.tool !== "task") return;
     const key = `${input.sessionID}\0${input.callID}`;
-    const dispatch = this.acceptedDispatches.get(key);
+    const dispatch = this.acceptedDispatches.get(key) ?? await this.recoverDispatch(input.sessionID, input.callID);
     this.acceptedDispatches.delete(key);
     if (!dispatch) throw new Error(resultRejectionMessage("missing_accepted_dispatch"));
     const parsed = parseResultEnvelope(output.output);
-    if (!parsed.ok) throw new Error(resultRejectionMessage(parsed.reason));
+    if (!parsed.ok) { await this.persistResult(input.sessionID, input.callID, undefined, parsed.reason); throw new Error(resultRejectionMessage(parsed.reason)); }
     const violation = validateResult(parsed.result, dispatch)[0];
-    if (violation) throw new Error(resultRejectionMessage(violation.code));
+    if (violation) { await this.persistResult(input.sessionID, input.callID, undefined, violation.code); throw new Error(resultRejectionMessage(violation.code)); }
+    await this.persistResult(input.sessionID, input.callID, parsed.result);
   }
 }
 
