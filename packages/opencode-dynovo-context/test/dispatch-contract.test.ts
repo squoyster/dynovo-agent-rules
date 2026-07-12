@@ -119,6 +119,12 @@ test("result envelope validates completion against its accepted dispatch", () =>
   );
 });
 
+test("result envelope accepts the native OpenCode task result transport wrapper", () => {
+  const wrapped = `<task id="ses_test" state="completed">\n<task_result>\n${resultOutput(result())}\n</task_result>\n</task>`;
+  assert.deepEqual(parseResultEnvelope(wrapped), { ok: true, result: result() });
+  assert.deepEqual(parseResultEnvelope(`prefix\n${wrapped}`), { ok: false, reason: "missing_result_envelope" });
+});
+
 test("result validator rejects an incomplete result contract before correlation", () => {
   assert.deepEqual(validateResult({} as never, dispatch()).map((item) => item.code), [
     "missing_dispatch_id",

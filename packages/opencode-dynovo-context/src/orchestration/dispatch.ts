@@ -95,11 +95,16 @@ export function parseDispatchEnvelope(prompt: unknown): DispatchParseResult {
 }
 
 export function parseResultEnvelope(output: unknown): ResultParseResult {
-  if (typeof output !== "string" || !output.startsWith(`${resultEnvelopeMarker}\n`)) {
+  if (typeof output !== "string") {
     return { ok: false, reason: "missing_result_envelope" };
   }
-  const end = output.indexOf("\n\n");
-  const json = output.slice(resultEnvelopeMarker.length, end === -1 ? undefined : end).trim();
+  const wrapped = output.match(/^<task\b[^>]*>\s*<task_result>\s*([\s\S]*?)\s*<\/task_result>\s*<\/task>\s*$/);
+  const resultOutput = wrapped?.[1] ?? output;
+  if (!resultOutput.startsWith(`${resultEnvelopeMarker}\n`)) {
+    return { ok: false, reason: "missing_result_envelope" };
+  }
+  const end = resultOutput.indexOf("\n\n");
+  const json = resultOutput.slice(resultEnvelopeMarker.length, end === -1 ? undefined : end).trim();
   try {
     const parsed: unknown = JSON.parse(json);
     if (!isRecord(parsed)) return { ok: false, reason: "invalid_result_json" };

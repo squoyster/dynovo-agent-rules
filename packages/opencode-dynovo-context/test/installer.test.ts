@@ -75,6 +75,7 @@ test("installer adds missing arrays with portable awk", async () => {
   const installedPlugin = await import(pathToFileURL(config.plugin[0]).href) as {
     default: (input: { directory: string; worktree: string }) => Promise<Record<string, unknown>>;
   };
+  assert.deepEqual(Object.keys(installedPlugin), ["default"]);
   const hooks = await installedPlugin.default({ directory: home, worktree: home });
   assert.equal(typeof hooks["experimental.chat.system.transform"], "function");
   assert.equal(typeof hooks["tool.execute.before"], "function");

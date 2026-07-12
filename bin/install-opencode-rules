@@ -52,6 +52,8 @@ deploy_bundle() {
     [[ -f "$PLUGIN_DIR/dist/index.js" && -f "$PLUGIN_DIR/dist/axl-boot.mjs" ]] || { echo "Local plugin build is incomplete" >&2; exit 1; }
     mkdir -p "$stage/plugin"
     cp -R "$PLUGIN_DIR/dist/." "$stage/plugin/"
+    mv "$stage/plugin/index.js" "$stage/plugin/runtime.js"
+    printf '%s\n' 'export { default } from "./runtime.js";' > "$stage/plugin/index.js"
   elif [[ -d "$DEPLOY_ROOT/plugin" ]]; then
     mkdir -p "$stage/plugin"
     cp -R "$DEPLOY_ROOT/plugin/." "$stage/plugin/"
