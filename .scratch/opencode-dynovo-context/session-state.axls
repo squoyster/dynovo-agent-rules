@@ -8,19 +8,19 @@ purpose: implementation handoff across requested model rounds
 objective: "Implement a production-quality optional OpenCode Dynovo context plugin"
 status: DOING
 risk: HIGH
-current_focus: SOL-001
-current_gate: red
-next_action: "Route t002 to gpt-5.6-terra to implement the production seams"
+current_focus: TERRA-001
+current_gate: validation
+next_action: "Route t003 to gpt-5.6-luna for AXL, installer, docs, fixtures, and closeout"
 
 @PLAN
 t001 status=DONE owner=gpt-5.6-sol action="Pin contracts and establish red gate" evidence=e003
-t002 status=TODO owner=gpt-5.6-terra action="Implement production core and reach green gate" evidence=NONE
+t002 status=DONE owner=gpt-5.6-terra action="Implement production core and reach green gate" evidence=e004
 t003 status=TODO owner=gpt-5.6-luna action="Complete AXL installer docs fixtures and validation" evidence=NONE
 t004 status=TODO owner=independent-reviewer action="Review standards and specification compliance" evidence=NONE
 
 @DELEGATIONS
 a001 task=t001 role=planner status=DONE objective="Resolve unstable APIs and define contract tests" scope=".scratch/**|packages/opencode-dynovo-context/test/**|package harness" constraints="no production core; preserve exact verified API contracts" owner=gpt-5.6-sol created_at=@20260711T0900 updated_at=@20260711T0930 result_ref=e003 unresolved="OpenCode upstream commit pin pending"
-a002 task=t002 role=implementer status=TODO objective="Implement the approved production seams" scope="packages/opencode-dynovo-context/src/**" constraints="do not weaken Sol red tests; smallest coherent implementation" owner=gpt-5.6-terra created_at=@20260711T0900 updated_at=@20260711T0900 result_ref=NONE unresolved=NONE depends_on=t001
+a002 task=t002 role=implementer status=DONE objective="Implement the approved production seams" scope="packages/opencode-dynovo-context/src/**" constraints="do not weaken Sol red tests; smallest coherent implementation" owner=gpt-5.6-terra created_at=@20260711T0900 updated_at=@20260711T1030 result_ref=e004 unresolved="Full feature completion remains assigned to Luna"
 a003 task=t003 role=implementer status=TODO objective="Finish deterministic integration and evidence" scope="axl/**|agents/**|bin/**|README.md|packages/opencode-dynovo-context/{README.md,test/**}" constraints="no unrelated rule semantics; no publish push or PR" owner=gpt-5.6-luna created_at=@20260711T0900 updated_at=@20260711T0900 result_ref=NONE unresolved=NONE depends_on=t002
 
 @DECISIONS
@@ -32,6 +32,7 @@ d003: "Do not use message transformation for Dynovo pruning" rationale="DCP owns
 e001 type=validation status=PASS command="bin/validate-axl" artifact=NONE summary="14 rule files, 185 rules, 6 budgets; 7 empty placeholders skipped"
 e002 type=api status=PASS command="inspect @opencode-ai/plugin 1.17.18 declarations" artifact=.scratch/opencode-dynovo-context/research.md summary="compacting hook and session.compacted event verified"
 e003 type=test status=PASS command="npm test" artifact=packages/opencode-dynovo-context/test summary="Red gate: four test files fail only on absent approved production modules"
+e004 type=validation status=PASS command="npm test && npm run typecheck && npm run build" artifact=packages/opencode-dynovo-context summary="9 tests passed; strict typecheck and build passed"
 
 @RISKS
 r001 status=active risk="Experimental OpenCode hooks can change" mitigation="isolate adapter and pin tested package version"
@@ -42,3 +43,4 @@ l001 at=@20260711T0900 event="Baseline AXL validation passed and repository was 
 l002 at=@20260711T0900 event="OpenCode 1.17.18 plugin contracts inspected locally"
 l003 at=@20260711T0900 event="SOL/TERRA/LUNA work partition recorded"
 l004 at=@20260711T0930 event="SOL-001 red gate established with four failing public-seam test files"
+l005 at=@20260711T1030 event="TERRA-001 production core implemented; test, typecheck, and build gates passed"

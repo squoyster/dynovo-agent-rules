@@ -27,3 +27,7 @@ tmp/
 *.out
 *.prof
 coverage.*
+
+# Node package build artifacts
+node_modules/
+dist/
