@@ -48,3 +48,28 @@ secret-like environment assignments as `<REDACTED:DYNOVO_SECRET>`.
 Runtime state is local under `.dynovo/` and ignored by default. The hook makes no
 network calls or LLM calls. Experimental OpenCode hook names are isolated in one
 adapter and may require maintenance as OpenCode evolves.
+
+## Configuration and workers
+
+Defaults enable checkpointing, custom prompts, recovery, DCP coexistence, and a
+cheap `coordinator` role. The schema accepts capsule limits, orchestrator
+controls (`requireEvidenceFromWorkers` is true and child transcripts are never
+retained), and explicit missing-ledger/ruleset/agent/write failure policies.
+
+Planner assignments return dependencies, gates, and acceptance mapping without
+implementation. Explorers are read-only. Test authors change tests and fixtures
+only. Implementers change only assigned production scope and never approved red
+tests. Reviewers are read-only and independent. Persist bounded assignments,
+material evidence, and unresolved items—not transcripts.
+
+## Troubleshooting and migration
+
+If compaction recovery is missing, verify the local plugin `dist/index.js` path,
+restart OpenCode, and inspect `.dynovo/checkpoints/<session>/`. If a ledger is
+invalid, Dynovo emits an explicit warning and references the canonical path; it
+never invents state. To migrate from native-only compaction, install the plugin,
+create an AXL-S ledger for nontrivial work, then enable DCP separately if wanted.
+
+Experimental OpenCode hooks can change between releases. Keep the plugin pinned
+to the tested OpenCode API version and treat unavailable post-compaction events
+as a recovery-warning condition rather than proof of a successful checkpoint.
