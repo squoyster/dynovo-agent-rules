@@ -25,6 +25,19 @@ envref: *ENV_VAR
 list: a|b|c
 null: ~
 draft_now: !NOW
+ctxref: ^id
+
+@REFERENCE_SEMANTICS
+$id: identified_axl_record_or_entity
+*ENV_VAR: process_environment_variable
+^id: value_or_marker_present_in_active_model_context
+
+@NORMS
+M: must_do_or_report_blocked
+F: must_not_do
+S: should_do_unless_higher_priority_rule_blocks
+P: allowed_not_required
+Pref: prefer_first_option_over_second_unless_blocked
 
 @NORMS
 M: must_do_or_report_blocked
