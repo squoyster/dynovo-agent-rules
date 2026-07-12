@@ -26,7 +26,8 @@ append_existing_array() {
   tmp=$(mktemp)
   awk -v key="$key" -v value="$value" '
     $0 ~ "^[[:space:]]*\\\"" key "\\\"[[:space:]]*:" { in_array=1 }
-    in_array && /^[[:space:]]*][[:space:]]*,?[[:space:]]*$/ && !done { print "    \"" value "\","; done=1; in_array=0 }
+    in_array && /^[[:space:]]*][[:space:]]*,?[[:space:]]*$/ && !done { print "    " (had ? "," : "") "\"" value "\""; done=1; in_array=0 }
+    in_array && $0 !~ "^[[:space:]]*\\\"" key "\\\"[[:space:]]*:" && $0 !~ /^[[:space:]]*$/ && $0 !~ /^[[:space:]]*\/\// { had=1 }
     { print }
   ' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
 }
