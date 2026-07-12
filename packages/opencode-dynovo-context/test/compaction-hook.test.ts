@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { createOpenCodeAdapter } from "../src/opencode/adapter.ts";
+import { SessionRegistry } from "../src/session-registry.ts";
 
 test("hook persists one checkpoint before injecting one capsule and prompt", async () => {
   const root = await mkdtemp(join(tmpdir(), "dynovo-hook-"));
@@ -91,4 +92,33 @@ test("separate sessions retain separate checkpoint state", async () => {
   ]);
   assert.match(left.context[0] ?? "", /session_id=ses_left/);
   assert.match(right.context[0] ?? "", /session_id=ses_right/);
+});
+
+test("unknown roles and unavailable rulesets are represented as warnings, never inferred", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-fallback-policy-"));
+  await new SessionRegistry(root).put({
+    sessionID: "ses_unknown",
+    workspaceRoot: root,
+    activeAgentRole: "unrecognized-worker",
+    rulesetRoot: root,
+    activeOverlays: ["missing-rules.axlr"],
+  });
+  const adapter = await createOpenCodeAdapter({
+    directory: root,
+    worktree: root,
+    rulesetRoot: root,
+    config: { failurePolicy: { ...{
+      missingLedger: "reconstruct-minimal",
+      invalidLedger: "inject-raw-and-warn",
+      writeFailure: "continue-with-warning",
+      missingRuleset: "reference-known-state",
+      unknownAgent: "warn",
+    } } },
+  });
+  const output = { context: [] as string[] };
+  await adapter.hooks["experimental.session.compacting"]?.({ sessionID: "ses_unknown" }, output);
+
+  assert.match(output.context[0] ?? "", /active_role=UNKNOWN/);
+  assert.match(output.context[0] ?? "", /UNKNOWN_AGENT_ROLE: permissions are not inferred/);
+  assert.match(output.context[0] ?? "", /RULESET_UNAVAILABLE:/);
 });

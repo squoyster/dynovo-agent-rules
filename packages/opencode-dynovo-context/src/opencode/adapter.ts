@@ -109,10 +109,19 @@ export class OpenCodeAdapter {
       const existing = await this.registry.get(sessionID);
       const { path: ledgerPath, projection } = await this.loadLedger(sessionID);
       const role = resolveRole(existing?.activeAgentRole ?? "coordinator");
+      if (role.role === "UNKNOWN" && this.config.failurePolicy.unknownAgent === "warn") {
+        projection.warnings.push({ id: "agent_unknown", text: "UNKNOWN_AGENT_ROLE: permissions are not inferred" });
+      }
       const activeOverlays = existing?.activeOverlays ?? [this.config.baseRules, "rules/context.axlr"];
       let obligations: ProtectedCheckpoint["obligations"] = [];
       try { obligations = await resolveActiveObligations(this.config.rulesetRoot!, activeOverlays, role.role, { pre_compaction: true, context_pressure_high: true }, existing?.rulesetCommit ?? "UNKNOWN"); }
-      catch (error) { this.options.onDiagnostic?.(`Dynovo context plugin: ruleset unavailable (${error instanceof Error ? error.message : "UNKNOWN"}).`); }
+      catch (error) {
+        const detail = error instanceof Error ? error.message : "UNKNOWN";
+        this.options.onDiagnostic?.(`Dynovo context plugin: ruleset unavailable (${detail}).`);
+        if (this.config.failurePolicy.missingRuleset === "reference-known-state") {
+          projection.warnings.push({ id: "ruleset_unavailable", text: `RULESET_UNAVAILABLE: ${this.config.rulesetRoot}` });
+        }
+      }
       const createdAt = new Date().toISOString();
       const id = this.checkpointID(sessionID);
       const capsuleModel: ProtectedCheckpoint = {
