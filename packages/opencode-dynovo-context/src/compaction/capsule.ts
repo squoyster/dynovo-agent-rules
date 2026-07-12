@@ -108,8 +108,5 @@ export function renderProtectedContextCapsule(checkpoint: ProtectedCheckpoint, o
   const activeFailures = checkpoint.failures.filter(item => item.hypothesisStatus === "active");
   result = render({ ...checkpoint, decisions: [], rejectedApproaches: [], verification: [], files: [], openQuestions: [] }, activePlan, activeFailures);
   if (result.length <= options.maxChars) return result;
-  // Do not cut through required authority, role, constraint, or failure records.
-  // If these records alone exceed a caller's limit, preserving canonical recovery
-  // state is safer than emitting a syntactically plausible partial capsule.
-  return result;
+  throw new Error(`Protected context requires ${result.length} chars, exceeding configured maxChars=${options.maxChars}`);
 }
