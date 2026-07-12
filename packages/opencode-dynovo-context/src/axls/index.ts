@@ -13,6 +13,7 @@ export class AxlsDocument {
   readonly blocks = new Map<string, AxlsBlock>();
   private readonly source: string;
   private readonly appended: Array<{ blockName: string; raw: string }> = [];
+  private mutated = false;
 
   constructor(source: string) {
     this.source = source;
@@ -34,17 +35,20 @@ export class AxlsDocument {
     const record = this.blocks.get(blockName)?.records.find((item) => item.id === id);
     if (!record) throw new Error(`Unknown ${blockName} record: ${id}`);
     record.fields = { ...fields };
+    record.raw = [id, ...Object.entries(fields).map(([key, value]) => `${key}=${/\s/.test(value) ? JSON.stringify(value) : value}`)].join(" ");
+    this.mutated = true;
   }
 
   serialize(): string {
-    if (!this.appended.length) return this.source;
+    if (!this.appended.length && !this.mutated) return this.source;
+    if (this.mutated) return [...this.blocks.values()].map((block) => `@${block.name}\n${block.records.map((record) => record.raw).join("\n")}`).join("\n\n") + "\n";
     const extension = this.appended.map(({ blockName, raw }) => `@${blockName}\n${raw}`).join("\n\n");
     return `${this.source.replace(/\n?$/, "\n")}\n${extension}\n`;
   }
 
   appendRecord(blockName: string, id: string, fields: Record<string, string>): void {
-    const block = this.blocks.get(blockName);
-    if (!block) throw new Error(`Unknown AXL-S block: ${blockName}`);
+    const block = this.blocks.get(blockName) ?? { name: blockName, records: [] };
+    this.blocks.set(blockName, block);
     const pairs = Object.entries(fields)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, item]) => `${key}=${/\s/.test(item) ? JSON.stringify(item) : item}`);

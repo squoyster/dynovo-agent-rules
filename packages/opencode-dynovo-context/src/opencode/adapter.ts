@@ -121,6 +121,7 @@ export class OpenCodeAdapter {
       const digest = createHash("sha256").update(capsule).digest("hex");
       const checkpointPath = join(checkpointDir, `${id}.json`);
       projection.document.appendRecord("LOG", `checkpoint_${id}`, { event: "compaction_checkpoint_prepared", checkpoint_id: id, status: "prepared" });
+      projection.document.appendRecord("CHECKPOINTS", id, { checkpoint_id: id, session_id: sessionID, ledger_revision: projection.ledgerVersion, ruleset_commit: capsuleModel.rulesetCommit, active_agent_role: role.role, current_plan_id: projection.currentPlanID, capsule_digest: digest, created_at: createdAt, status: "prepared" });
       await atomicWrite(ledgerPath, projection.document.serialize());
       await atomicWrite(join(checkpointDir, `${id}.capsule`), capsule);
       await atomicWrite(checkpointPath, `${JSON.stringify({ checkpoint_id: id, session_id: sessionID, ledger_revision: projection.ledgerVersion, ruleset_commit: capsuleModel.rulesetCommit, active_agent_role: role.role, current_plan_id: projection.currentPlanID, capsule_digest: digest, created_at: createdAt, status: "prepared" }, null, 2)}\n`);
@@ -155,11 +156,13 @@ export class OpenCodeAdapter {
     if (!sessionID || this.recovery.has(sessionID)) return;
     const prepared = this.prepared.get(sessionID);
     if (prepared) {
+      const state = await this.registry.get(sessionID);
       const record = JSON.parse(await readFile(prepared.checkpointPath, "utf8")) as Record<string, unknown>;
       await atomicWrite(prepared.checkpointPath, `${JSON.stringify({ ...record, status: "successful" }, null, 2)}\n`);
       try {
         const projection = projectLedger(await readFile(prepared.ledgerPath, "utf8"));
         projection.document.appendRecord("LOG", `checkpoint_${prepared.id}_success`, { event: "compaction_checkpoint_success", checkpoint_id: prepared.id, status: "successful" });
+        projection.document.appendRecord("CHECKPOINTS", `${prepared.id}_success`, { checkpoint_id: prepared.id, session_id: sessionID, ledger_revision: projection.ledgerVersion, ruleset_commit: state?.rulesetCommit ?? "UNKNOWN", active_agent_role: state?.activeAgentRole ?? "UNKNOWN", current_plan_id: state?.currentPlanID ?? "NONE", capsule_digest: String(record.capsule_digest ?? "UNKNOWN"), created_at: new Date().toISOString(), status: "successful" });
         await atomicWrite(prepared.ledgerPath, projection.document.serialize());
       } catch (error) { this.options.onDiagnostic?.(`Dynovo context plugin: could not append recovery log (${error instanceof Error ? error.message : "UNKNOWN"}).`); }
     }
