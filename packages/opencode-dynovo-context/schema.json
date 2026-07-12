@@ -13,6 +13,8 @@
     "injectCustomPrompt": {"type": "boolean"},
     "postCompactionRecovery": {"type": "boolean"},
     "dcpCoexistence": {"type": "boolean"},
-    "capsule": {"type": "object", "properties": {"maxChars": {"type": "integer", "minimum": 1024}, "includeCompletedPlanItems": {"type": "integer", "minimum": 0}, "includeResolvedFailures": {"type": "integer", "minimum": 0}, "includeSuccessfulEvidence": {"type": "integer", "minimum": 0}}, "additionalProperties": false}
+    "capsule": {"type": "object", "properties": {"maxChars": {"type": "integer", "minimum": 1024}, "includeCompletedPlanItems": {"type": "integer", "minimum": 0}, "includeResolvedFailures": {"type": "integer", "minimum": 0}, "includeSuccessfulEvidence": {"type": "integer", "minimum": 0}}, "additionalProperties": false},
+    "orchestrator": {"type": "object", "additionalProperties": false, "properties": {"enabled": {"type": "boolean"}, "defaultRole": {"type": "string"}, "requireEvidenceFromWorkers": {"type": "boolean"}, "retainChildTranscripts": {"const": false}}},
+    "failurePolicy": {"type": "object", "additionalProperties": false, "properties": {"missingLedger": {"enum": ["reconstruct-minimal", "warn"]}, "invalidLedger": {"enum": ["inject-raw-and-warn", "warn"]}, "writeFailure": {"enum": ["continue-with-warning", "abort"]}, "missingRuleset": {"enum": ["reference-known-state", "warn"]}, "unknownAgent": {"enum": ["mark-unknown", "warn"]}}}
   }
 }
