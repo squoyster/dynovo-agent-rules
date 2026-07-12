@@ -22,6 +22,7 @@ export interface AdapterOptions {
   config?: Partial<DynovoContextConfig>;
   observe?: (event: string) => void;
   onDiagnostic?: (message: string) => void;
+  installedPlugins?: string[];
 }
 
 interface PreparedCheckpoint { id: string; capsule: string; createdAt: string; ledgerPath: string; checkpointPath: string }
@@ -68,6 +69,9 @@ export class OpenCodeAdapter {
     this.options = options;
     this.config = resolveConfig(options.worktree, { ...options.config, rulesetRoot: options.rulesetRoot ?? options.worktree });
     this.registry = new SessionRegistry(options.worktree, this.config.stateDirectory);
+    if (this.config.dcpCoexistence && options.installedPlugins?.some((plugin) => plugin.includes("opencode-dcp"))) {
+      this.options.onDiagnostic?.("Dynovo context plugin: DCP detected; selective pruning remains delegated to DCP.");
+    }
     this.hooks = { "experimental.session.compacting": this.compacting.bind(this), "chat.message": this.chatMessage.bind(this), event: this.event.bind(this) };
   }
 

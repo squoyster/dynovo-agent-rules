@@ -14,3 +14,10 @@ test("Dynovo does not register a message-pruning transform owned by DCP", async 
   assert.equal(output.context.filter((item) => item.startsWith("DYNOVO_PROTECTED_CONTEXT_V1")).length, 1);
   assert.equal(output.context[0], "[DCP compressed tool range: original unavailable]");
 });
+
+test("DCP detection reports coexistence without changing pruning hooks", async () => {
+  const root = await mkdtemp(join(tmpdir(), "dynovo-dcp-detect-"));
+  const diagnostics: string[] = [];
+  await createOpenCodeAdapter({ directory: root, worktree: root, rulesetRoot: root, installedPlugins: ["@tarquinen/opencode-dcp"], onDiagnostic: (message) => diagnostics.push(message) });
+  assert.deepEqual(diagnostics, ["Dynovo context plugin: DCP detected; selective pruning remains delegated to DCP."]);
+});
