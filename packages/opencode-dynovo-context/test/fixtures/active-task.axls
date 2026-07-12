@@ -1,0 +1,26 @@
+@META
+id: fixture-task
+v: 0.6
+kind: axls
+
+@STATE
+objective: "Repair provider fallback without weakening the approved test"
+status: DOING
+risk: HIGH
+current_focus: t005
+current_gate: green
+next_action: "Delegate t005 to implementer within src/provider/**"
+
+@PLAN
+t004 status=DONE owner=explorer action="Find provider routing implementation" evidence=e014
+t005 status=DOING owner=implementer action="Make smallest provider fallback change" evidence=NONE
+
+@DELEGATIONS
+a001 task=t004 role=explorer status=DONE objective="Find provider routing implementation" scope="src/provider/**" constraints="read-only" owner=explorer-1 created_at=@20260711T0800 updated_at=@20260711T0810 result_ref=e014 unresolved=NONE
+a002 task=t005 role=implementer status=DOING objective="Implement approved fallback behavior" scope="src/provider/**" constraints="do not edit test/provider/fallback.test.ts" owner=implementer-1 created_at=@20260711T0820 updated_at=@20260711T0820 result_ref=NONE unresolved=NONE depends_on=t004
+
+@FAILURES
+f001 command="npm test -- test/provider/fallback.test.ts --runInBand" exit_code=1 error="Expected provider=backup, received provider=primary (attempts=2)" hypothesis_status=active evidence=e015
+
+@VENDOR_EXTENSION
+x001 exact="preserve me"

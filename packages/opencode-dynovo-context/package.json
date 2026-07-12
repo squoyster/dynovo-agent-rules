@@ -1,0 +1,35 @@
+{
+  "name": "@dynovo/opencode-context",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Durable AXL context checkpoints for OpenCode native compaction",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "schema.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.17.18"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.17.18",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "license": "MIT"
+}
