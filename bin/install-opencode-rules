@@ -34,7 +34,7 @@ append_existing_array() {
 if [[ "$RULES_ONLY" -eq 1 ]] && ! grep -Fq -- "$URL" "$CONFIG"; then
   if grep -Eq '^[[:space:]]*"instructions"[[:space:]]*:' "$CONFIG"; then append_existing_array instructions "$URL"; echo "Added instruction to existing array"; else
   tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
-  awk -v line="  \"instructions\": [\"$URL\"]" '{ lines[NR]=$0; if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) last=NR } END { prev=0; for(i=last-1;i>=1;i--){s=lines[i];sub(/^[[:space:]]+/,"",s);if(s!=""&&s!~/^\/\//){prev=i;break}}; for(i=1;i<=NR;i++){if(i==last)print line;if(i==prev){t=lines[i];sub(/[[:space:]]+$/,"",t);if(t!~/,$/)t=t ",";print t;next}print lines[i]}}' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
+  awk -v line="  \"instructions\": [\"$URL\"]" '{ lines[NR]=$0; if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) last=NR } END { prev=0; for(i=last-1;i>=1;i--){s=lines[i];sub(/^[[:space:]]+/,"",s);if(s!=""&&s!~/^\/\//){prev=i;break}}; for(i=1;i<=NR;i++){if(i==last)print line;if(i==prev){t=lines[i];sub(/[[:space:]]+$/,"",t);if(t!~/,$/)t=t ",";print t}else print lines[i]}}' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
   echo "Added instructions to $CONFIG"
   fi
 fi
@@ -52,7 +52,7 @@ if [[ "$WITH_CONTEXT" -eq 1 ]] && ! grep -Fq -- "$PLUGIN" "$CONFIG"; then
   [[ -f "$PLUGIN" ]] || { echo "Local plugin build did not produce $PLUGIN" >&2; exit 1; }
   if grep -Eq '^[[:space:]]*"plugin"[[:space:]]*:' "$CONFIG"; then append_existing_array plugin "$PLUGIN"; echo "Added plugin to existing array"; else
   tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
-  awk -v line="  \"plugin\": [\"$PLUGIN\"]" '{ lines[NR]=$0; if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) last=NR } END { prev=0; for(i=last-1;i>=1;i--){s=lines[i];sub(/^[[:space:]]+/,"",s);if(s!=""&&s!~/^\/\//){prev=i;break}}; for(i=1;i<=NR;i++){if(i==last)print line;if(i==prev){t=lines[i];sub(/[[:space:]]+$/,"",t);if(t!~/,$/)t=t ",";print t;next}print lines[i]}}' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
+  awk -v line="  \"plugin\": [\"$PLUGIN\"]" '{ lines[NR]=$0; if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) last=NR } END { prev=0; for(i=last-1;i>=1;i--){s=lines[i];sub(/^[[:space:]]+/,"",s);if(s!=""&&s!~/^\/\//){prev=i;break}}; for(i=1;i<=NR;i++){if(i==last)print line;if(i==prev){t=lines[i];sub(/[[:space:]]+$/,"",t);if(t!~/,$/)t=t ",";print t}else print lines[i]}}' "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
   echo "Built and added local plugin $PLUGIN to $CONFIG"
   fi
 fi

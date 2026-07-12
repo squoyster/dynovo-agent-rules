@@ -24,3 +24,17 @@ test("installer preserves JSONC comments and deduplicates existing arrays", asyn
   assert.equal(result.match(/AGENTS\.md/g)?.length, 1);
   assert.equal(result.match(/dist\/index\.js/g)?.length, 1);
 });
+
+test("installer adds missing arrays with portable awk", async () => {
+  const home = await mkdtemp(join(tmpdir(), "dynovo-installer-empty-"));
+  const xdgConfig = join(home, "xdg");
+  const configDir = join(xdgConfig, "opencode");
+  const configPath = join(configDir, "opencode.json");
+  await mkdir(configDir, { recursive: true });
+  await writeFile(configPath, '{\n  "$schema": "https://opencode.ai/config.json"\n}\n');
+  const script = resolve(import.meta.dirname, "../../../bin/install-opencode-rules");
+  await exec(script, ["--rules-only", "--with-context-plugin"], { env: { ...process.env, HOME: home, XDG_CONFIG_HOME: xdgConfig } });
+  const result = await readFile(configPath, "utf8");
+  assert.match(result, /"instructions": \[/);
+  assert.match(result, /"plugin": \[/);
+});
