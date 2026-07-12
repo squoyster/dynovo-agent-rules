@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Dynovo OpenCode Context configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {"type": "boolean"},
+    "rulesetRoot": {"type": "string"},
+    "baseRules": {"type": "string"},
+    "activeLedger": {"type": "string"},
+    "stateDirectory": {"type": "string"},
+    "checkpointOnCompaction": {"type": "boolean"},
+    "injectCustomPrompt": {"type": "boolean"},
+    "postCompactionRecovery": {"type": "boolean"},
+    "dcpCoexistence": {"type": "boolean"},
+    "capsule": {"type": "object", "properties": {"maxChars": {"type": "integer", "minimum": 1024}, "includeCompletedPlanItems": {"type": "integer", "minimum": 0}, "includeResolvedFailures": {"type": "integer", "minimum": 0}, "includeSuccessfulEvidence": {"type": "integer", "minimum": 0}}, "additionalProperties": false}
+  }
+}

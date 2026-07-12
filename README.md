@@ -31,12 +31,15 @@ reporting success. `bin/validate-axl` mechanically checks that profile.
 - `ledgers/example-project.axls` — project-level state ledger example.
 - `skills/axl-humanize/SKILL.md` — on-demand, fact-preserving expansion and fidelity-assessment workflow.
 - `bin/install-opencode-rules` — idempotently wires the root anchor URL into `~/.config/opencode/opencode.json[c]`.
+- `agents/context-orchestrator.axlr` — cheap coordinator role with bounded delegation and evidence rules.
+- `packages/opencode-dynovo-context/` — optional OpenCode native-compaction integration; see its README.
 - `bin/validate-axl` — checks AXL-R grammar, IDs, imports, and prompt budgets.
 
 ## Install
 
 ```bash
-./bin/install-opencode-rules        # add the AGENTS.md anchor URL to opencode config
+./bin/install-opencode-rules --rules-only        # add only the AGENTS.md anchor URL
+./bin/install-opencode-rules --with-context-plugin # add rules and Dynovo plugin
 ./bin/install-opencode-rules --force # re-install even if already present
 ```
 

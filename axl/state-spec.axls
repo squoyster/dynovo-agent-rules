@@ -36,7 +36,16 @@ blank_lines: ignored
 
 @BLOCKS
 required: @META
-optional: @STATE|@PLAN|@PIN|@CTX|@CTX_INDEX|@DONE_CTX|@EVIDENCE|@RISKS|@DECISIONS|@LOG|@LOGREF|@REF|@IMPORT|@LOCK
+optional: @STATE|@PLAN|@PIN|@CTX|@CTX_INDEX|@DONE_CTX|@EVIDENCE|@RISKS|@DECISIONS|@DELEGATIONS|@CHECKPOINTS|@LOG|@LOGREF|@REF|@IMPORT|@LOCK
+
+@DELEGATIONS
+required_fields: id|task|role|status|objective|scope|constraints|owner|created_at|updated_at|result_ref|unresolved
+optional_fields: parent|depends_on|worktree|branch|commit|model|cost_class
+transcripts: forbidden
+
+@CHECKPOINTS
+required_fields: checkpoint_id|session_id|ledger_revision|ruleset_commit|active_agent_role|current_plan_id|capsule_digest|created_at|status
+status_values: prepared|successful|failed
 
 @UPDATE_RULES
 plan_append_only: ?1
