@@ -94,3 +94,8 @@ test("bounded rendering drops completed history before active failure", () => {
   assert.match(rendered, /attempts=2/);
   assert.doesNotMatch(rendered, /done-29/);
 });
+
+test("capsule rejects a mandatory projection that cannot fit the configured bound", () => {
+  const impossible = { ...checkpoint, constraints: [{ id: "c001", text: "x".repeat(4_000) }] };
+  assert.throws(() => renderProtectedContextCapsule(impossible, { maxChars: 1_024 }), /exceeding configured maxChars/);
+});

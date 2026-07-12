@@ -15,11 +15,6 @@ export async function resolveActiveObligations(root: string, paths: string[], ro
   for (const path of [...new Set(paths)].sort()) {
     const absolute = safePath(root, path);
     const info = await stat(absolute);
-    const cached = cache.get(absolute);
-    if (cached?.mtimeMs === info.mtimeMs) {
-      results.push(...cached.obligations);
-      continue;
-    }
     const obligations = (await readFile(absolute, "utf8")).split("\n").flatMap((line) => {
       const match = /^([A-Z][A-Z0-9]+):\s+([^|]+)\|\s*([^\s(]+).*?->\s+([MFSP][a-z]*)\s+(.+?)(?:\s+\[|$)/.exec(line);
       if (!match || (match[2]!.trim() !== "all" && match[2]!.trim() !== role)) return [];
